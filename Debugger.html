@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數獨維運工具 - 專業高效版</title>
+    <style>
+        :root {
+            --purple: #8e44ad;
+            --blue: #3498db;
+            --green: #27ae60; /* 新增綠色用於數列功能 */
+            --dark: #2c3e50;
+            --bg: #f0f2f5;
+            --cell-size: 13vh; 
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .main-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: row; 
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        /* --- 左側：純淨盤面區 --- */
+        .left-section { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center;
+            align-items: center;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, var(--cell-size));
+            border: 4px solid var(--dark);
+            background: var(--dark);
+            gap: 1px;
+        }
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background: white;
+            border: 1px solid #ddd;
+            text-align: center;
+            font-size: calc(var(--cell-size) * 0.5);
+            font-weight: bold;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .v-line { border-right: 4px solid var(--dark) !important; }
+        .h-line { border-bottom: 4px solid var(--dark) !important; }
+
+        .btn-clear-area { margin-top: 15px; width: 100%; }
+        .btn-clear { 
+            width: 100%; padding: 10px; background: #95a5a6; color: white; 
+            border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
+        }
+
+        /* --- 右側：數據操作區 --- */
+        .right-section {
+            flex: 1;
+            display: flex;
+            flex-direction: row; 
+            gap: 15px;
+        }
+
+        .data-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel-block {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--dark); border-left: 5px solid var(--purple); padding-left: 10px; }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-size: 13px;
+            background: #fdfdfd;
+            resize: none;
+        }
+
+        .result-box {
+            background: #fff0f5;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px dashed #f06292;
+            text-align: center;
+        }
+        .result-code {
+            display: block;
+            word-break: break-all;
+            background: white;
+            padding: 10px;
+            margin-top: 5px;
+            font-size: 1.2rem;
+            color: #d63384;
+            cursor: pointer;
+            border: 1px solid #ffc1e3;
+            border-radius: 5px;
+            letter-spacing: 1px;
+        }
+
+        /* --- 最右側：直式按鈕區 --- */
+        .action-sidebar {
+            width: 100px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .side-btn {
+            flex: 1;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 5px;
+            font-size: 1rem;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transition: opacity 0.2s;
+        }
+        .side-btn:hover { opacity: 0.8; }
+        .btn-import-json { background: var(--blue); }
+        .btn-import-raw { background: var(--green); } /* 新按鈕顏色 */
+        .btn-export { background: var(--purple); }
+
+        .tip { font-size: 0.75rem; color: #7f8c8d; margin-top: 3px; }
+        #copyNotice { color: var(--blue); font-weight: bold; display: none; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="left-section">
+            <div id="gridContainer" class="grid"></div>
+            <div class="btn-clear-area">
+                <button class="btn-clear" onclick="clearGrid()">清空盤面</button>
+            </div>
+            <div class="tip">直接輸入 1-6。空格為 0。</div>
+        </div>
+
+        <div class="right-section">
+            <div class="data-content">
+                <div class="panel-block" style="flex: 0.5;">
+                    <h3 style="border-left-color: var(--green);">⚡ 數列快讀 (貼上 36 位數字)</h3>
+                    <textarea id="rawStringInput" placeholder="例如：050206246003124065560421400632602010..."></textarea>
+                </div>
+                
+                <div class="panel-block">
+                    <h3>📥 數據導入 (JSON 格式)</h3>
+                    <textarea id="jsonInput" placeholder="請在此貼入 JSON 數據..."></textarea>
+                </div>
+
+                <div class="panel-block" style="flex: 0 0 auto;">
+                    <h3>📤 導出 Data 字串</h3>
+                    <div class="result-box">
+                        <div id="copyNotice">已複製到剪貼簿！</div>
+                        <code id="outputString" class="result-code" onclick="copyToClipboard()">000000000000000000000000000000000000</code>
+                        <div class="tip">點擊上方字串即可複製</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-sidebar">
+                <button class="side-btn btn-import-raw" onclick="importRawString()">導入純數列</button>
+                <button class="side-btn btn-import-json" onclick="importJSON()">讀取 JSON</button>
+                <button class="side-btn btn-export" onclick="exportString()">產生題庫字串</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('gridContainer');
+        for (let i = 0; i < 36; i++) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'cell';
+            input.maxLength = 1;
+            input.id = 'c' + i;
+            input.oninput = function() { 
+                this.value = this.value.replace(/[^1-6]/g, ''); 
+                exportString(); 
+            };
+            
+            if (i % 6 === 2) input.classList.add('v-line');
+            if (Math.floor(i / 6) === 1 || Math.floor(i / 6) === 3) input.classList.add('h-line');
+            
+            grid.appendChild(input);
+        }
+
+        function clearGrid() {
+            if(!confirm("確定清空盤面？")) return;
+            for(let i=0; i<36; i++) {
+                const c = document.getElementById('c'+i);
+                c.value = '';
+                c.style.backgroundColor = 'white';
+                c.style.color = 'black';
+            }
+            exportString();
+        }
+
+        // 新增功能：導入 36 位純數字數列
+        function importRawString() {
+            const raw = document.getElementById('rawStringInput').value.trim();
+            const cleanData = raw.replace(/[^0-9]/g, ''); // 過濾掉可能的空格或符號
+            
+            if (cleanData.length !== 36) {
+                alert(`長度錯誤！目前長度為 ${cleanData.length}，必須為 36 位。`);
+                return;
+            }
+
+            for (let i = 0; i < 36; i++) {
+                const val = cleanData[i];
+                const cell = document.getElementById('c' + i);
+                cell.value = (val === "0" ? "" : val);
+                cell.style.backgroundColor = 'white';
+                cell.style.color = 'black';
+            }
+            exportString();
+            alert("數列導入成功！");
+        }
+
+        function importJSON() {
+            const raw = document.getElementById('jsonInput').value.trim();
+            try {
+                const data = JSON.parse(raw);
+                data.forEach((item, i) => {
+                    const cell = document.getElementById('c' + i);
+                    cell.value = (item.val == 0 ? "" : item.val);
+                    cell.style.color = item.isFixed ? 'black' : 'var(--purple)';
+                    cell.style.backgroundColor = item.isFixed ? '#f2f2f2' : 'white';
+                });
+                exportString();
+            } catch (e) {
+                alert("JSON 數據解析失敗，請檢查格式。");
+            }
+        }
+
+        function exportString() {
+            let res = "";
+            for (let i = 0; i < 36; i++) {
+                const v = document.getElementById('c' + i).value;
+                res += (v === "" ? "0" : v);
+            }
+            document.getElementById('outputString').innerText = res;
+        }
+
+        function copyToClipboard() {
+            const text = document.getElementById('outputString').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const notice = document.getElementById('copyNotice');
+                notice.style.display = 'block';
+                setTimeout(() => notice.style.display = 'none', 1500);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>６ｘ６連線數獨第一品牌</title>
+    <style>
+        :root {
+            --purple: #8e44ad;
+            --green: #2ecc71;
+            --blue: #3498db;
+            --red: #e74c3c;
+            --gray: #95a5a6;
+            --bg: #f4f7f6;
+            --cell: 60px;
+        }
+        body {
+            font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        /* 大廳容器 */
+        .lobby-container {
+            display: flex;
+            gap: 25px;
+            align-items: flex-start;
+            justify-content: center;
+            width: 100%;
+            max-width: 900px;
+            margin-top: 30px;
+        }
+
+        .lobby-box {
+    background: white;
+    padding: 30px;
+    border-radius: 24px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+    /* width 部分建議維持你原本的 400px，或是圖片中的 90% 皆可 */
+    width: 400px; 
+    text-align: center;
+    flex-shrink: 0;
+    /* --- 加入下面這一行 --- */
+    overflow: hidden; 
+}
+
+        .notice-board {
+            background: white;
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+            width: 320px;
+            text-align: left;
+            border-left: 6px solid var(--purple);
+        }
+        .notice-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--purple);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .notice-content {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.8;
+        }
+
+        /* 頁籤與按鈕 */
+        .tab-group { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 12px; cursor: pointer; color: #ccc; font-weight: bold; transition: 0.3s; }
+        .tab.active { color: var(--purple); border-bottom: 3px solid var(--purple); }
+
+        .opt-group { display: flex; gap: 8px; justify-content: center; margin: 15px 0; flex-wrap: wrap; }
+        .opt-btn {
+            padding: 10px 15px;
+            border: 1.5px solid #ddd;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .opt-btn.active { background: var(--purple); color: white; border-color: var(--purple); }
+        .opt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-main {
+            width: 100%;
+            padding: 16px;
+            background: var(--purple);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #732d91;
+            margin-top: 10px;
+        }
+        .btn-main:active { transform: translateY(2px); box-shadow: 0 2px 0 #732d91; }
+
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
+        .n-btn {
+            background: #fff; border: 1px solid #ddd; border-radius: 12px;
+            padding: 15px 0; font-size: 20px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 3px 0 #eee;
+        }
+
+        #game-ui { display: none; gap: 30px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+        .grid { display: grid; grid-template-columns: repeat(6, var(--cell)); border: 3px solid #000; background: white; position: relative; }
+        .grid::after {
+            content: ""; position: absolute; top: 0; left: calc(var(--cell) * 3 - 1.5px);
+            width: 3px; height: 100%; background: #000; z-index: 10; pointer-events: none;
+        }
+        .cell {
+            width: var(--cell); height: var(--cell); display: flex; align-items: center; justify-content: center;
+            border: 0.5px solid #ccc; font-size: 26px; cursor: pointer; user-select: none;
+        }
+        .h-line { border-bottom: 3px solid #000 !important; }
+        .cell.fixed { background: #f0f0f0; font-weight: bold; }
+        .cell.selected { background: #e3f2fd; outline: 2px solid var(--blue); z-index: 5; }
+
+        .side-panel { width: 340px; display: flex; flex-direction: column; gap: 15px; }
+        .status-banner { background: white; padding: 15px; border-radius: 15px; text-align: center; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.03); font-size: 18px; }
+        .member-area { background: rgba(255,255,255,0.7); padding: 12px; border-radius: 12px; border: 1px dashed #ccc; }
+        .member-badge { display: inline-block; padding: 5px 12px; background: white; border-radius: 20px; margin: 4px; border: 1px solid #eee; font-size: 13px; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-box { background: white; padding: 30px; border-radius: 24px; text-align: center; width: 320px; }
+        .report-opt { display: block; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #eee; border-radius: 12px; cursor: pointer; font-weight: bold; }
+        .btn-exit-trigger { background: none; border: none; color: var(--gray); text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 15px; }
+
+        @media (max-width: 800px) {
+            .lobby-container { flex-direction: column; align-items: center; margin-top: 10px; }
+            .lobby-box, .notice-board { width: 90%; max-width: 400px; }
+            :root { --cell: 50px; }
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div class="lobby-container" id="lobby-root">
+    <div id="lobby" class="lobby-box">
+        <div class="tab-group">
+            <div id="tab-create" class="tab active" onclick="switchTab('create')">建立遊戲</div>
+            <div id="tab-join" class="tab" onclick="switchTab('join')">加入房間</div>
+        </div>
+
+        <div id="panel-create">
+            <p style="color:#666; font-size:14px;">選擇人數</p>
+            <div class="opt-group" id="p-opts">
+                <button class="opt-btn" onclick="setVal('p',1)">1 單身貴族</button>
+                <button class="opt-btn active" onclick="setVal('p',2)">2 雙排</button>
+                <button class="opt-btn" onclick="setVal('p',3)">3 個和尚沒水喝</button>
+                <button class="opt-btn" onclick="setVal('p',4)">4 不太吉利</button>
+                <button class="opt-btn" onclick="setVal('p',5)">5 友誼破壞機</button>
+                <button class="opt-btn" onclick="setVal('p',6)">6 居然湊到六個人？</button>
+            </div>
+            <p style="color:#666; font-size:14px;">難度等級</p>
+            <div class="opt-group" id="d-opts">
+                <button class="opt-btn active" onclick="setVal('d',1)">1 簡單</button>
+                <button class="opt-btn" onclick="setVal('d',2)">2 自信✨</button>
+            </div>
+            <button class="btn-main" onclick="socket.emit('createRoom', config)">開始創建</button>
+        </div>
+
+        <div id="panel-join" style="display:none;">
+            <div class="status-banner" style="margin-bottom:15px; border:1px solid #ddd; min-height:50px; display:flex; align-items:center; justify-content:center;">
+                <span id="display-rid" style="letter-spacing: 5px; font-size:24px; color:var(--purple);"></span>
+                <span style="width:2px; height:24px; background:var(--purple); animation: blink 1s infinite;" id="cursor"></span>
+            </div>
+            <div class="keypad">
+                <button class="n-btn" onclick="pressLobby(1)">1</button>
+                <button class="n-btn" onclick="pressLobby(2)">2</button>
+                <button class="n-btn" onclick="pressLobby(3)">3</button>
+                <button class="n-btn" onclick="pressLobby(4)">4</button>
+                <button class="n-btn" onclick="pressLobby(5)">5</button>
+                <button class="n-btn" onclick="pressLobby(6)">6</button>
+                <button class="n-btn" onclick="pressLobby(7)">7</button>
+                <button class="n-btn" onclick="pressLobby(8)">8</button>
+                <button class="n-btn" onclick="pressLobby(9)">9</button>
+                <button class="n-btn" style="background:#f5f5f5;" onclick="pressLobby('back')">←</button>
+                <button class="n-btn" onclick="pressLobby(0)">0</button>
+                <button class="n-btn" style="background:#f5f5f5;" onclick="pressLobby('clear')">C</button>
+            </div>
+            <button class="btn-main" style="background:var(--blue); box-shadow:0 4px 0 #2980b9;" onclick="doCheck()">查詢房間</button>
+            <div id="pos-selector" class="opt-group" style="display:none; margin-top:15px; background:#f9f9f9; padding:10px; border-radius:12px;"></div>
+        </div>
+    </div>
+
+    <div class="notice-board">
+        <div class="notice-title">📢 系統公告</div>
+        <div class="notice-content">
+            Welcome To <b>連線數獨第一品牌</b>，<br>
+            請與朋友一同享受數獨的樂趣吧！<br>
+            • 💡 <span onclick="openModal('guide-modal')" style="color: var(--purple); font-weight: bold; text-decoration: underline; cursor: pointer;">新手教學：點我查看玩法</span><br>
+            • <b>換題投票</b>：如果覺得題目很🦐，可申請換題。<br>
+            • <b>回報問題</b>：若發現題目有誤請告知我們。<br>
+            • 使用電腦體驗更佳！<br>
+            • 作者時不時就會進行版本更新，記得刷新頁面喔！<br>
+            • 出題、9x9模式等，敬請期待後續更新😎<br>
+        </div>
+    </div>
+</div>
+
+<div id="game-ui">
+    <div class="game-left">
+        <div id="board" class="grid"></div>
+        <div style="margin-top:10px; font-size:12px; color:#bbb; display:flex; justify-content:space-between;">
+            <div>題目：<span id="puzzle-id">--</span></div>
+            <div id="report-link" style="cursor:pointer; text-decoration:underline; display:none;" onclick="openModal('report-modal')">回報問題</div>
+        </div>
+    </div>
+
+    <div class="side-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 id="rid-txt" style="margin:0;">房號：----</h3>
+            <span id="pnum-txt" style="background:#eee; padding:2px 8px; border-radius:5px; font-size:12px;">--號</span>
+        </div>
+        <div id="status-txt" class="status-banner">等待玩家...</div>
+        <div class="member-area">
+            <div style="font-size:11px; color:#999; margin-bottom:5px;">當前玩家</div>
+            <div id="member-list-content"></div>
+        </div>
+        <button id="ready-btn" class="btn-main" style="background:var(--green); box-shadow:0 4px 0 #27ae60;" onclick="socket.emit('ready', myRoomId)">準備好了 👍</button>
+        <button id="change-btn" class="btn-main" style="background:var(--gray); font-size:14px; box-shadow:0 4px 0 #7f8c8d;" onclick="socket.emit('requestChangePuzzle', myRoomId)">換題投票 (<span id="change-count">0/0</span>)</button>
+
+        <div id="control-area" style="display:none;">
+            <div class="keypad">
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(1)">1</button>
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(2)">2</button>
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(3)">3</button>
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(4)">4</button>
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(5)">5</button>
+                <button class="n-btn" style="height:60px; font-size:24px;" onclick="fill(6)">6</button>
+            </div>
+            <button class="btn-main" style="background:var(--red); box-shadow:0 4px 0 #c0392b; margin-top:5px;" onclick="fill(null)">擦除 / 清除內容</button>
+        </div>
+        <div style="margin-top:auto; text-align:center;">
+            <button id="destroy-btn" class="btn-exit-trigger" style="color:var(--red); display:none;" onclick="openModal('destroy-modal')">解散房間</button>
+            <button id="leave-btn" class="btn-exit-trigger" style="display:none;" onclick="openModal('leave-modal')">退出房間</button>
+        </div>
+    </div>
+</div>
+
+<div id="guide-modal" class="modal-overlay">
+    <div class="modal-box" style="width: 85%; max-width: 450px;">
+        <h3 style="color:var(--purple);">🎮新手教學</h3>
+        <div style="text-align: left; font-size: 14px; color: #555; line-height: 1.8;">
+            1. <b>數獨的規則</b>：同行、同列及粗線框內數字不可重複。<br>
+            2. <b>創建遊戲</b>：<b>選擇玩家數</b>及<b>題目難度</b>，將 4 位數房號告知好友。<br>
+            3. <b>加入遊戲</b>：輸入正確房號，選擇玩家編號。所有玩家準備後才會開始喔！<br>
+            4. <b>輪到你時才能操作盤面！</b>如果有人掛機請肘擊他。<br>
+            5. 點擊空格，使用數字鍵盤填入數字吧！<br>
+            6. <b>共同通關</b>：填滿後若正確即可過關，房主可點擊開啟下一局！<br>
+        </div>
+        <button class="btn-main" onclick="closeModal('guide-modal')" style="margin-top: 20px;">了解，去玩遊戲！</button>
+    </div>
+</div>
+
+<div id="report-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3>回報問題</h3>
+        <button class="report-opt" onclick="sendReport('題目有誤')">題目有誤</button>
+        <button class="report-opt" onclick="sendReport('多解')">多解 / 不只一解</button>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+        <p style="font-size: 12px; color: #999; text-align: left; margin-bottom: 5px;">具體描述 (選填)：</p>
+        <textarea id="report-text" placeholder="例如：第 3 行第 2 格好像有問題..." style="width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit; resize: none; box-sizing: border-box;"></textarea>
+        <button class="btn-main" style="background:var(--blue); font-size:14px; height: auto; padding: 10px; margin-top: 10px;" onclick="sendReport(document.getElementById('report-text').value || '玩家自定義回報')">送出描述</button>
+        <button class="btn-exit-trigger" style="color:var(--gray); border:none;" onclick="closeModal('report-modal')">取消</button>
+    </div>
+</div>
+
+<div id="complete-modal" class="modal-overlay"><div class="modal-box"><h3>填滿了！確定完成？</h3><p id="vote-status" style="color:var(--purple); font-weight:bold;"></p><div style="display:flex; gap:10px; margin-top:20px;"><button class="btn-main" style="background:var(--green); margin:0; flex:1;" onclick="socket.emit('voteComplete', {roomId:myRoomId, agree:true})">是</button><button class="btn-main" style="background:var(--gray); margin:0; flex:1;" onclick="socket.emit('voteComplete', {roomId:myRoomId, agree:false})">否</button></div></div></div>
+<div id="success-modal" class="modal-overlay"><div class="modal-box"><h1 style="color:var(--green); font-size:50px; margin:0;">🏆</h1><h2>完美通關！</h2><button id="btn-next-game" class="btn-main" style="display:none;" onclick="socket.emit('backToDraft', myRoomId)">開啟下一局</button><button class="btn-exit-trigger" onclick="location.reload()">回大廳</button></div></div>
+<div id="destroy-modal" class="modal-overlay"><div class="modal-box"><h3>確定要解散？</h3><button class="btn-main" style="background:var(--red);" onclick="socket.emit('destroyRoom', myRoomId)">確定解散</button><button class="btn-exit-trigger" onclick="closeModal('destroy-modal')">取消</button></div></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let myRoomId, myNum, selectedIdx, config = { p: 2, d: 1 }, lastBoard = null, lobbyRid = "";
+
+    function switchTab(t) {
+    // 1. 切換頁籤按鈕的 active 狀態
+    document.getElementById('tab-create').classList.toggle('active', t === 'create');
+    document.getElementById('tab-join').classList.toggle('active', t === 'join');
+
+    // 2. 切換主面板顯示
+    const panelCreate = document.getElementById('panel-create');
+    const panelJoin = document.getElementById('panel-join');
+    
+    panelCreate.style.display = (t === 'create') ? 'block' : 'none';
+    panelJoin.style.display = (t === 'join') ? 'block' : 'none';
+
+    // 3. 【關鍵修正】切換回「建立」時，重置「加入」頁面的暫存狀態
+    if (t === 'create') {
+        lobbyRid = ""; // 清空輸入的房號
+        document.getElementById('display-rid').innerText = ""; // 清空顯示
+        document.getElementById('pos-selector').style.display = 'none'; // 隱藏選位區
+        document.getElementById('pos-selector').innerHTML = ''; // 清空選位按鈕
+    }
+}
+    function setVal(k, v) { 
+        config[k] = v; 
+        document.querySelectorAll(`#${k}-opts .opt-btn`).forEach(b => b.classList.toggle('active', b.innerText.includes(v)));
+    }
+    function pressLobby(key) {
+        if(key === 'back') lobbyRid = lobbyRid.slice(0, -1);
+        else if(key === 'clear') lobbyRid = "";
+        else if(lobbyRid.length < 5) lobbyRid += key;
+        document.getElementById('display-rid').innerText = lobbyRid;
+    }
+    function doCheck() { if(lobbyRid) socket.emit('checkRoom', lobbyRid); }
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function sendReport(reason) {
+        socket.emit('reportIssue', { roomId: myRoomId, puzzleId: document.getElementById('puzzle-id').innerText, board: lastBoard, reason: reason });
+        closeModal('report-modal'); alert("回報成功！");
+    }
+
+    function syncUI(s) {
+        lastBoard = s.board;
+        document.getElementById('puzzle-id').innerText = s.puzzleId;
+        document.getElementById('rid-txt').innerText = "房號：" + s.id;
+        document.getElementById('pnum-txt').innerText = myNum + " 號";
+        document.getElementById('report-link').style.display = (s.puzzleId !== "--") ? 'block' : 'none';
+        const ml = document.getElementById('member-list-content');
+        ml.innerHTML = s.occupiedNums.sort((a,b)=>a-b).map(n => `<span class="member-badge">${n}號 ${n===1?'👑':''}</span>`).join('');
+        const th = s.maxPlayers === 1 ? 1 : Math.ceil((s.maxPlayers + 1) / 2);
+        document.getElementById('change-count').innerText = `${s.changeRequests?.length || 0}/${th}`;
+        const changeBtn = document.getElementById('change-btn');
+        if (s.phase === 'DRAFTING' || s.phase === 'SOLVING') {
+            changeBtn.style.display = 'block'; changeBtn.disabled = s.changeRequests.includes(myNum);
+        } else { changeBtn.style.display = 'none'; }
+        if(s.phase === 'RESULT') { closeModal('complete-modal'); openModal('success-modal'); document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none'; return; }
+        document.getElementById('complete-modal').style.display = s.phase === 'CHECKING' ? 'flex' : 'none';
+        if(s.phase === 'CHECKING') document.getElementById('vote-status').innerText = `同意人數：${s.completeVotes.length} / ${th}`;
+        if(s.phase === 'DRAFTING') {
+            document.getElementById('status-txt').innerText = `等待中 (${s.readyPlayers.length}/${s.maxPlayers})`;
+            document.getElementById('ready-btn').style.display = 'block'; document.getElementById('ready-btn').disabled = s.readyPlayers.includes(myNum);
+            document.getElementById('control-area').style.display = 'none';
+        } else {
+            document.getElementById('status-txt').innerHTML = `輪到 <span style="color:red">${s.turn}號</span>`;
+            document.getElementById('ready-btn').style.display = 'none';
+            document.getElementById('control-area').style.display = 'block';
+            document.getElementById('control-area').style.opacity = (s.turn === myNum) ? 1 : 0.4;
+            document.getElementById('control-area').style.pointerEvents = (s.turn === myNum) ? 'auto' : 'none';
+        }
+        renderBoard(s);
+    }
+
+    function renderBoard(s) {
+        const b = document.getElementById('board'); b.innerHTML = '';
+        s.board.forEach((c, i) => {
+            const d = document.createElement('div');
+            d.className = 'cell' + (c.isFixed ? ' fixed' : '') + (i === selectedIdx ? ' selected' : '');
+            if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
+            if(c.val) d.innerHTML = `<span style="color:${c.isFixed?'#000':'var(--purple)'}">${c.val}</span>`;
+            d.onclick = () => { if(!c.isFixed) { selectedIdx = i; renderBoard(s); } };
+            b.appendChild(d);
+        });
+    }
+
+    function fill(v) { if(selectedIdx !== null) socket.emit('fill', {roomId:myRoomId, index:selectedIdx, val:v}); }
+
+    socket.on('roomStatus', d => {
+        const a = document.getElementById('pos-selector'); a.style.display = 'flex'; a.innerHTML = '';
+        for(let i=1; i<=d.maxPlayers; i++) {
+            const b = document.createElement('button'); b.className = 'opt-btn'; b.innerText = i+'號';
+            if(d.occupiedNums.includes(i)) b.disabled = true;
+            else b.onclick = () => socket.emit('selectPos', {roomId: lobbyRid, pNum: i});
+            a.appendChild(b);
+        }
+    });
+
+    socket.on('joined', d => {
+        myRoomId = d.roomId; myNum = d.pNum;
+        document.getElementById('lobby-root').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'flex';
+        document.getElementById('destroy-btn').style.display = (myNum === 1) ? 'inline-block' : 'none';
+        document.getElementById('leave-btn').style.display = (myNum !== 1) ? 'inline-block' : 'none';
+        syncUI(d.state);
+    });
+
+    socket.on('sync', s => syncUI(s));
+    socket.on('roomDestroyed', () => { alert("房間已解散"); location.reload(); });
+    socket.on('left', () => location.reload());
+</script>
+</body>
+</html>
