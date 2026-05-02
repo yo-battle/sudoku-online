@@ -97,7 +97,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 投票與結算驗證
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
         const room = rooms[roomId];
@@ -109,14 +108,17 @@ io.on('connection', (socket) => {
             const th = room.maxPlayers === 1 ? 1 : Math.ceil((room.maxPlayers + 1) / 2);
 
             if (room.completeVotes.length >= th) {
-                const currentBoardStr = room.board.map(cell => cell.val || 0).join('');
-                if (currentBoardStr === room.answer) {
+                // 1. 取得目前的盤面陣列 [1, 5, 3, 2, 4, 6, ...]
+                const boardValues = room.board.map(cell => cell.val);
+
+                // 2. 使用你的邏輯進行檢查
+                if (validateSudoku6x6(boardValues)) {
                     room.phase = 'RESULT';
                     room.lastError = null;
                 } else {
                     room.phase = 'SOLVING';
                     room.completeVotes = []; 
-                    room.lastError = "答案有誤，請再檢查一下！";
+                    room.lastError = "答案有誤（行列或宮格重複），請再檢查！";
                     io.to(roomId).emit('notification', { msg: room.lastError });
                 }
             }
@@ -125,6 +127,36 @@ io.on('connection', (socket) => {
         }
         io.to(roomId).emit('sync', room);
     });
+
+// 在 io.on 外部定義檢查邏輯
+function validateSudoku6x6(b) {
+    for (let i = 0; i < 6; i++) {
+        let row = new Set();
+        let col = new Set();
+        let block = new Set();
+
+        for (let j = 0; j < 6; j++) {
+            // 橫行檢查 (Row)
+            let rVal = b[i * 6 + j];
+            if (row.has(rVal)) return false;
+            row.add(rVal);
+
+            // 直列檢查 (Column) - 這就是你說的「每組的第 j 個」
+            let cVal = b[j * 6 + i];
+            if (col.has(cVal)) return false;
+            col.add(cVal);
+
+            // 2x3 宮格檢查 (Block)
+            // 這是將 0-35 的索引轉換成 2x3 區域的邏輯
+            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
+            let bc = (i % 2) * 3 + (j % 3);
+            let bVal = b[br * 6 + bc];
+            if (block.has(bVal)) return false;
+            block.add(bVal);
+        }
+    }
+    return true;
+}
 
     // 基礎房間操作
     socket.on('checkRoom', (rid) => { if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); });
