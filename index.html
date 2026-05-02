@@ -231,7 +231,7 @@
     </div>
 
 <div class="notice-board" style="border-color: #7248E5;">
-    <div class="notice-title" style="background-color: #7248E5;">📢 系統公告</div>
+    <div class="notice-title" style="background-color: #f9f9f9;">📢 系統公告</div>
     <div class="notice-content">
         Welcome To <b>連線數獨第一品牌</b>，<br>
         與朋友一同享受數獨的樂趣吧！<br>
@@ -547,7 +547,7 @@
 
     socket.on('joined', d => {
         myRoomId = d.roomId; myNum = d.pNum;
-        document.getElementById('lobby-root').style.display = 'none';
+        document.getElementById('lobby-ui').style.display = 'none';
         document.getElementById('game-ui').style.display = 'flex';
         document.getElementById('destroy-btn').style.display = (myNum === 1) ? 'inline-block' : 'none';
         document.getElementById('leave-btn').style.display = (myNum !== 1) ? 'inline-block' : 'none';
@@ -595,6 +595,11 @@
         // 5. 讓大廳回到「建立遊戲」的初始頁籤
         switchTab('create');
     }
+socket.on('joined', d => {
+    alert("成功接收到加入訊號！"); // <-- 加入這行
+    myRoomId = d.roomId; 
+    ...
+});
 </script>
 </body>
 </html>
