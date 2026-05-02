@@ -322,9 +322,41 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function sendReport(reason) {
-        socket.emit('reportIssue', { roomId: myRoomId, puzzleId: document.getElementById('puzzle-id').innerText, board: lastBoard, reason: reason });
-        closeModal('report-modal'); alert("回報成功！");
-    }
+    // 1. 準備資料 (收集原本 socket 要傳的資訊)
+    const reportData = {
+        roomId: myRoomId,
+        puzzleId: document.getElementById('puzzle-id').innerText,
+        board: lastBoard,
+        reason: reason,
+        time: new Date().toLocaleString()
+    };
+
+    // 2. 設定 Google 表單資訊 (請換成你自己的 ID 和 entry 號碼)
+    const formID = "1hxqrXqmpRtaVVw8tU9e1QJmesnf4IixdfxZU18N2CI8"; 
+    const entryID = "entry.260725270"; 
+    const formURL = `https://docs.google.com/forms/d/${formID}/formResponse`;
+
+    // 3. 包裝成 Google 表單可接受的格式
+    const params = new URLSearchParams();
+    params.append(entryID, JSON.stringify(reportData));
+
+    // 4. 發送回報 (不再依賴 socket.js，直接發給 Google)
+    fetch(formURL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString()
+    })
+    .then(() => {
+        // 原本的關閉視窗與提示
+        closeModal('report-modal'); 
+        alert("回報成功！資料已存入雲端試算表。");
+    })
+    .catch(err => {
+        console.error("回報失敗:", err);
+        alert("回報失敗，請檢查網路連線。");
+    });
+}
 
     function syncUI(s) {
         lastBoard = s.board;
