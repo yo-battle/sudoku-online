@@ -335,12 +335,28 @@
         <h2>完美通關！</h2>
         
         <button id="btn-next-game" class="btn-main" style="display:none;" 
-                onclick="socket.emit('backToDraft', myRoomId)">開啟下一局</button>
+                onclick="socket.emit('backToDraft', myRoomId)">開啟下一局👉</button>
         
         <button class="btn-exit-trigger" onclick="socket.emit('leaveRoom', myRoomId)">回到大廳</button>
         
         <button class="btn-exit-trigger" style="color:var(--blue); margin-left:10px;" 
                 onclick="closeModal('success-modal')">留在房間</button>
+    </div>
+</div>
+
+<div id="destroy-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3 style="color:var(--red);">🚨確定？</h3>
+        <p style="font-size: 14px; color: #666; line-height: 1.6;">
+            所有玩家將被踢回大廳，<br>
+            且無法恢復進度喔！
+        </p>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-main" style="background:var(--red); margin:0; flex:1; box-shadow: 0 4px 0 #c0392b;" 
+                onclick="socket.emit('destroyRoom', myRoomId); closeModal('destroy-modal');">確定解散</button>
+            <button class="btn-main" style="background:var(--gray); margin:0; flex:1; box-shadow: 0 4px 0 #7f8c8d;" 
+                onclick="closeModal('destroy-modal')">取消</button>
+        </div>
     </div>
 </div>
 <script src="/socket.io/socket.io.js"></script>
