@@ -3,18 +3,15 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const fs = require('fs');
-const path = require('path'); // 提到前面，確保後面能使用
+const path = require('path');
 const os = require('os');
 
-// 1. 設定靜態檔案讀取（重要：讓 Render 找得到你的 index.html 和其他檔案）
+// 1. 設定靜態檔案與路由
 app.use(express.static(__dirname));
-
-// 2. 設定首頁路由
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- 以下是你原本的邏輯 ---
 let rooms = {};
 let roomCounters = {}; 
 
@@ -27,12 +24,14 @@ function loadPuzzles() {
         const data = fs.readFileSync('./puzzles.json', 'utf8');
         return JSON.parse(data);
     } catch (err) {
-        return { "1": [{ id: "ERR", data: "0".repeat(36) }] };
+        return { "1": [{ id: "ERR", data: "0".repeat(36), answer: "0".repeat(36) }] };
     }
 }
 
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
+    
+    // 創建房間
     socket.on('createRoom', (data) => {
         const puzzles = loadPuzzles();
         const pCount = parseInt(data.p) || 2;
@@ -47,12 +46,15 @@ io.on('connection', (socket) => {
             id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
             phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
             players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
-            board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' }))
+            board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
+            answer: puzzle.answer, 
+            lastError: null
         };
         socket.join(roomId);
         socket.emit('joined', { roomId, pNum: 1, state: rooms[roomId] });
     });
 
+    // 換題邏輯
     socket.on('requestChangePuzzle', (roomId) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -64,8 +66,12 @@ io.on('connection', (socket) => {
             const puzzles = loadPuzzles();
             const pList = puzzles[room.difficulty] || puzzles["1"];
             const puzzle = pList[Math.floor(Math.random() * pList.length)];
+            
             room.puzzleId = puzzle.id;
             room.board = puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' }));
+            room.answer = puzzle.answer; 
+            room.lastError = null; 
+
             room.phase = 'DRAFTING';
             room.readyPlayers = []; room.changeRequests = []; room.completeVotes = []; room.turn = 1;
             io.to(roomId).emit('sync', room);
@@ -74,39 +80,53 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('reportIssue', (data) => {
-        const { roomId, puzzleId, board, reason } = data;
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `report_${puzzleId}_${timestamp}.txt`;
-        const content = `時間: ${new Date().toLocaleString()}\n原因: ${reason}\n房間: ${roomId}\n盤面: ${JSON.stringify(board)}\n`;
-        fs.writeFile(path.join(ERROR_DIR, fileName), content, (err) => {});
-    });
-
+    // 填字邏輯
     socket.on('fill', (data) => {
         const { roomId, index, val } = data;
         const room = rooms[roomId];
         if (!room || room.phase !== 'SOLVING') return;
         if (room.turn === room.players[socket.id] && !room.board[index].isFixed) {
             room.board[index].val = val;
-            if (room.board.every(cell => cell.val !== null)) { room.phase = 'CHECKING'; room.completeVotes = []; }
-            else { room.turn = (room.turn % room.maxPlayers) + 1; }
+            room.lastError = null; // 修正中，清除錯誤提示
+            if (room.board.every(cell => cell.val !== null)) { 
+                room.phase = 'CHECKING'; room.completeVotes = []; 
+            } else { 
+                room.turn = (room.turn % room.maxPlayers) + 1; 
+            }
             io.to(roomId).emit('sync', room);
         }
     });
 
+    // 投票與結算驗證
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
         const room = rooms[roomId];
         if (!room || room.phase !== 'CHECKING') return;
+
         if (agree) {
             const pNum = room.players[socket.id];
             if (!room.completeVotes.includes(pNum)) room.completeVotes.push(pNum);
             const th = room.maxPlayers === 1 ? 1 : Math.ceil((room.maxPlayers + 1) / 2);
-            if (room.completeVotes.length >= th) room.phase = 'RESULT';
-        } else { room.phase = 'SOLVING'; room.completeVotes = []; }
+
+            if (room.completeVotes.length >= th) {
+                const currentBoardStr = room.board.map(cell => cell.val || 0).join('');
+                if (currentBoardStr === room.answer) {
+                    room.phase = 'RESULT';
+                    room.lastError = null;
+                } else {
+                    room.phase = 'SOLVING';
+                    room.completeVotes = []; 
+                    room.lastError = "答案有誤，請再檢查一下！";
+                    io.to(roomId).emit('notification', { msg: room.lastError });
+                }
+            }
+        } else { 
+            room.phase = 'SOLVING'; room.completeVotes = []; room.lastError = null;
+        }
         io.to(roomId).emit('sync', room);
     });
 
+    // 基礎房間操作
     socket.on('checkRoom', (rid) => { if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); });
     
     socket.on('selectPos', (d) => {
@@ -134,21 +154,21 @@ io.on('connection', (socket) => {
     });
 
     socket.on('destroyRoom', (rid) => { if(rooms[rid] && rooms[rid].players[socket.id] === 1) { io.to(rid).emit('roomDestroyed'); delete rooms[rid]; } });
+
+    socket.on('reportIssue', (data) => {
+        const { roomId, puzzleId, board, reason } = data;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `report_${puzzleId}_${timestamp}.txt`;
+        const content = `時間: ${new Date().toLocaleString()}\n原因: ${reason}\n房間: ${roomId}\n盤面: ${JSON.stringify(board)}\n`;
+        fs.writeFile(path.join(ERROR_DIR, fileName), content, (err) => {});
+    });
 });
 
+// 伺服器啟動
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
     console.log('\x1b[36m%s\x1b[0m', '==============================================');
-    console.log('\x1b[32m%s\x1b[0m', '   🚀 數獨連線遊戲伺服器已成功啟動！');
-    console.log('\x1b[36m%s\x1b[0m', '==============================================');
-    console.log(`   🏠 本機存取地址: http://localhost:${PORT}`);
-    const interfaces = os.networkInterfaces();
-    for (let devName in interfaces) {
-        interfaces[devName].forEach((details) => {
-            if (details.family === 'IPv4' && !details.internal) {
-                console.log(`   🌐 區域網路地址: http://${details.address}:${PORT}`);
-            }
-        });
-    }
+    console.log('\x1b[32m%s\x1b[0m', '    🚀 數獨連線遊戲伺服器已成功啟動！');
+    console.log(`    🏠 地址: http://localhost:${PORT}`);
     console.log('\x1b[36m%s\x1b[0m', '==============================================');
 });
