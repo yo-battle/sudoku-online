@@ -31,6 +31,36 @@ function loadPuzzles() {
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
     
+    // 新增：處理房長開啟下一局的請求
+    socket.on('backToDraft', (roomId) => {
+        const room = rooms[roomId];
+        // 安全檢查：只有房長 (pNum === 1) 且房間存在時才能重啟
+        if (room && room.players[socket.id] === 1) {
+            const puzzles = loadPuzzles();
+            const pList = puzzles[room.difficulty] || puzzles["1"];
+            const puzzle = pList[Math.floor(Math.random() * pList.length)];
+            
+            // 1. 更新盤面與答案
+            room.puzzleId = puzzle.id;
+            room.board = puzzle.data.split('').map(num => ({ 
+                val: num !== '0' ? parseInt(num) : null, 
+                isFixed: num !== '0' 
+            }));
+            room.answer = puzzle.answer;
+            
+            // 2. 重置房間狀態，但保留玩家
+            room.phase = 'DRAFTING';
+            room.readyPlayers = [];    // 清空準備狀態
+            room.changeRequests = [];  // 清空換題投票
+            room.completeVotes = [];   // 清空完成投票
+            room.lastError = null;     // 清除錯誤訊息
+            room.turn = 1;             // 輪次歸零
+            
+            // 3. 通知所有人同步
+            io.to(roomId).emit('sync', room);
+        }
+    });
+
     // 創建房間
     socket.on('createRoom', (data) => {
         const puzzles = loadPuzzles();
@@ -97,21 +127,31 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 完成投票邏輯
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
-        const room = rooms[roomId];
+        const room = rooms[roomId]; // 1. 先抓出房間
+        
+        // 2. 基礎安全檢查
         if (!room || room.phase !== 'CHECKING') return;
 
+        // 3. 確保玩家在房間內
+        const pNum = room.players[socket.id];
+        if (!pNum) return; 
+
         if (agree) {
-            const pNum = room.players[socket.id];
-            if (!room.completeVotes.includes(pNum)) room.completeVotes.push(pNum);
+            // 4. 防止重複投票
+            if (!room.completeVotes.includes(pNum)) {
+                room.completeVotes.push(pNum);
+            }
+            
             const th = room.maxPlayers === 1 ? 1 : Math.ceil((room.maxPlayers + 1) / 2);
 
             if (room.completeVotes.length >= th) {
-                // 1. 取得目前的盤面陣列 [1, 5, 3, 2, 4, 6, ...]
+                // 取得純數字陣列進行驗證
                 const boardValues = room.board.map(cell => cell.val);
 
-                // 2. 使用你的邏輯進行檢查
+                // 5. 呼叫外部的驗證函式
                 if (validateSudoku6x6(boardValues)) {
                     room.phase = 'RESULT';
                     room.lastError = null;
@@ -119,47 +159,22 @@ io.on('connection', (socket) => {
                     room.phase = 'SOLVING';
                     room.completeVotes = []; 
                     room.lastError = "答案有誤（行列或宮格重複），請再檢查！";
-                    io.to(roomId).emit('notification', { msg: room.lastError });
                 }
             }
         } else { 
-            room.phase = 'SOLVING'; room.completeVotes = []; room.lastError = null;
+            // 有人點「否」，退回解題狀態
+            room.phase = 'SOLVING'; 
+            room.completeVotes = []; 
+            room.lastError = null;
         }
+        
         io.to(roomId).emit('sync', room);
     });
 
-// 在 io.on 外部定義檢查邏輯
-function validateSudoku6x6(b) {
-    for (let i = 0; i < 6; i++) {
-        let row = new Set();
-        let col = new Set();
-        let block = new Set();
-
-        for (let j = 0; j < 6; j++) {
-            // 橫行檢查 (Row)
-            let rVal = b[i * 6 + j];
-            if (row.has(rVal)) return false;
-            row.add(rVal);
-
-            // 直列檢查 (Column) - 這就是你說的「每組的第 j 個」
-            let cVal = b[j * 6 + i];
-            if (col.has(cVal)) return false;
-            col.add(cVal);
-
-            // 2x3 宮格檢查 (Block)
-            // 這是將 0-35 的索引轉換成 2x3 區域的邏輯
-            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
-            let bc = (i % 2) * 3 + (j % 3);
-            let bVal = b[br * 6 + bc];
-            if (block.has(bVal)) return false;
-            block.add(bVal);
-        }
-    }
-    return true;
-}
-
     // 基礎房間操作
-    socket.on('checkRoom', (rid) => { if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); });
+    socket.on('checkRoom', (rid) => { 
+        if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); 
+    });
     
     socket.on('selectPos', (d) => {
         const r = rooms[d.roomId];
@@ -178,14 +193,29 @@ function validateSudoku6x6(b) {
     });
 
     socket.on('leaveRoom', (rid) => {
-        const r = rooms[rid]; if(!r) return;
-        const n = r.players[socket.id]; delete r.players[socket.id];
+        const r = rooms[rid]; 
+        if(!r) return;
+        
+        const n = r.players[socket.id]; 
+        delete r.players[socket.id];
         r.occupiedNums = r.occupiedNums.filter(x => x !== n);
-        socket.leave(rid); socket.emit('left');
-        if(Object.keys(r.players).length > 0) io.to(rid).emit('sync', r); else delete rooms[rid];
+        
+        socket.leave(rid); 
+        socket.emit('left'); 
+        
+        if(Object.keys(r.players).length > 0) {
+            io.to(rid).emit('sync', r); 
+        } else {
+            delete rooms[rid]; 
+        }
     });
 
-    socket.on('destroyRoom', (rid) => { if(rooms[rid] && rooms[rid].players[socket.id] === 1) { io.to(rid).emit('roomDestroyed'); delete rooms[rid]; } });
+    socket.on('destroyRoom', (rid) => { 
+        if(rooms[rid] && rooms[rid].players[socket.id] === 1) { 
+            io.to(rid).emit('roomDestroyed'); 
+            delete rooms[rid]; 
+        } 
+    });
 
     socket.on('reportIssue', (data) => {
         const { roomId, puzzleId, board, reason } = data;
@@ -195,6 +225,35 @@ function validateSudoku6x6(b) {
         fs.writeFile(path.join(ERROR_DIR, fileName), content, (err) => {});
     });
 });
+
+// 在 io.on 外部定義檢查邏輯
+function validateSudoku6x6(b) {
+    for (let i = 0; i < 6; i++) {
+        let row = new Set();
+        let col = new Set();
+        let block = new Set();
+
+        for (let j = 0; j < 6; j++) {
+            // 橫行檢查 (Row)
+            let rVal = b[i * 6 + j];
+            if (row.has(rVal)) return false;
+            row.add(rVal);
+
+            // 直列檢查 (Column)
+            let cVal = b[j * 6 + i];
+            if (col.has(cVal)) return false;
+            col.add(cVal);
+
+            // 2x3 宮格檢查 (Block)
+            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
+            let bc = (i % 2) * 3 + (j % 3);
+            let bVal = b[br * 6 + bc];
+            if (block.has(bVal)) return false;
+            block.add(bVal);
+        }
+    }
+    return true;
+}
 
 // 伺服器啟動
 const PORT = process.env.PORT || 3000;

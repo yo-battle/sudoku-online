@@ -289,7 +289,11 @@
         </div>
         <div style="margin-top:auto; text-align:center;">
             <button id="destroy-btn" class="btn-exit-trigger" style="color:var(--red); display:none;" onclick="openModal('destroy-modal')">解散房間</button>
-            <button id="leave-btn" class="btn-exit-trigger" style="display:none;" onclick="openModal('leave-modal')">重刷⏳退出房間🏃‍♂️</button>
+
+            <button id="leave-btn" class="btn-exit-trigger" style="display:none;"  
+    onclick="if(confirm('確定要退出房間嗎？')) { socket.emit('leaveRoom', myRoomId); }">
+    退出房間🏃‍♂️
+</button>
         </div>
     </div>
 </div>
@@ -324,9 +328,21 @@
 </div>
 
 <div id="complete-modal" class="modal-overlay"><div class="modal-box"><h3>填滿了！確定完成？</h3><p id="vote-status" style="color:var(--purple); font-weight:bold;"></p><div style="display:flex; gap:10px; margin-top:20px;"><button class="btn-main" style="background:var(--green); margin:0; flex:1;" onclick="socket.emit('voteComplete', {roomId:myRoomId, agree:true})">是</button><button class="btn-main" style="background:var(--gray); margin:0; flex:1;" onclick="socket.emit('voteComplete', {roomId:myRoomId, agree:false})">否</button></div></div></div>
-<div id="success-modal" class="modal-overlay"><div class="modal-box"><h1 style="color:var(--green); font-size:50px; margin:0;">🏆</h1><h2>完美通關！</h2><button id="btn-next-game" class="btn-main" style="display:none;" onclick="socket.emit('backToDraft', myRoomId)">開啟下一局</button><button class="btn-exit-trigger" onclick="location.reload()">回大廳</button></div></div>
-<div id="destroy-modal" class="modal-overlay"><div class="modal-box"><h3>確定要解散？</h3><button class="btn-main" style="background:var(--red);" onclick="socket.emit('destroyRoom', myRoomId)">確定解散</button><button class="btn-exit-trigger" onclick="closeModal('destroy-modal')">取消</button></div></div>
 
+<div id="success-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h1 style="color:var(--green); font-size:50px; margin:0;">🏆</h1>
+        <h2>完美通關！</h2>
+        
+        <button id="btn-next-game" class="btn-main" style="display:none;" 
+                onclick="socket.emit('backToDraft', myRoomId)">開啟下一局</button>
+        
+        <button class="btn-exit-trigger" onclick="socket.emit('leaveRoom', myRoomId)">回到大廳</button>
+        
+        <button class="btn-exit-trigger" style="color:var(--blue); margin-left:10px;" 
+                onclick="closeModal('success-modal')">留在房間</button>
+    </div>
+</div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
@@ -403,13 +419,19 @@
     });
 }
 
-    function syncUI(s) {
+  function syncUI(s) {
         lastBoard = s.board;
         document.getElementById('puzzle-id').innerText = s.puzzleId;
         document.getElementById('rid-txt').innerText = "房號：" + s.id;
         document.getElementById('pnum-txt').innerText = myNum + " 號";
         document.getElementById('report-link').style.display = (s.puzzleId !== "--") ? 'block' : 'none';
         
+        // --- 核心修改：控制退出與解散按鈕 ---
+        // 房長(1號)顯示解散，其他人顯示退出
+        document.getElementById('destroy-btn').style.display = (myNum === 1) ? 'inline-block' : 'none';
+        document.getElementById('leave-btn').style.display = (myNum !== 1) ? 'inline-block' : 'none';
+        // -------------------------------
+
         const ml = document.getElementById('member-list-content');
         ml.innerHTML = s.occupiedNums.sort((a,b)=>a-b).map(n => `<span class="member-badge">${n}號 ${n===1?'👑':''}</span>`).join('');
         
@@ -420,6 +442,11 @@
         if (s.phase === 'DRAFTING' || s.phase === 'SOLVING') {
             changeBtn.style.display = 'block'; 
             changeBtn.disabled = s.changeRequests.includes(myNum);
+            
+            // 【關鍵新增】如果是準備階段，確保通關彈窗會自動關閉
+            if (s.phase === 'DRAFTING') {
+                closeModal('success-modal');
+            }
         } else { 
             changeBtn.style.display = 'none'; 
         }
@@ -442,16 +469,12 @@
             document.getElementById('ready-btn').disabled = s.readyPlayers.includes(myNum);
             document.getElementById('control-area').style.display = 'none';
         } else {
-            // --- 修改這部分：加入錯誤提示判斷 ---
             const statusTxt = document.getElementById('status-txt');
             if (s.phase === 'SOLVING' && s.lastError) {
-                // 如果後端傳來錯誤訊息，顯示紅色警告
                 statusTxt.innerHTML = `<span style="color: var(--red); font-weight: bold;">⚠️ ${s.lastError}</span>`;
             } else {
-                // 正常顯示輪到誰
                 statusTxt.innerHTML = `輪到 <span style="color:var(--purple)">${s.turn}號</span>`;
             }
-            // ----------------------------------
             
             document.getElementById('ready-btn').style.display = 'none';
             document.getElementById('control-area').style.display = 'block';
@@ -496,8 +519,45 @@
 
     socket.on('sync', s => syncUI(s));
 
-    socket.on('roomDestroyed', () => { alert("房間已解散"); location.reload(); });
-    socket.on('left', () => location.reload());
+    // 當房長按「確定解散」時，其他玩家會收到這個
+    socket.on('roomDestroyed', () => { 
+        alert("房間已解散"); 
+        handleElegantExit(); 
+    });
+
+    // 當你點「回大廳」或「退出房間」，後端處理完會傳回這個
+    socket.on('left', () => {
+        handleElegantExit();
+    });
+
+    // --- 關鍵的優雅切換函式：原本的功能一個都不漏 ---
+    function handleElegantExit() {
+        // 1. 切換顯示：顯示大廳，隱藏遊戲畫面
+        document.getElementById('lobby-root').style.display = 'flex';
+        document.getElementById('game-ui').style.display = 'none';
+        
+        // 2. 重置原本代碼中的關鍵變數
+        myRoomId = null;
+        myNum = null;
+        selectedIdx = null;
+        lobbyRid = ""; 
+        lastBoard = null; 
+        
+        // 3. 清理大廳 UI 狀態 (原本 left 裡有的動作)
+        document.getElementById('display-rid').innerText = "";
+        const posSelector = document.getElementById('pos-selector');
+        posSelector.style.display = 'none';
+        posSelector.innerHTML = '';
+        
+        // 4. 確保關閉所有彈窗 (包含剛才的成功彈窗、確定解散彈窗等)
+        closeModal('complete-modal');
+        closeModal('success-modal');
+        closeModal('destroy-modal');
+        closeModal('report-modal');
+
+        // 5. 讓大廳回到「建立遊戲」的初始頁籤
+        switchTab('create');
+    }
 </script>
 </body>
 </html>
