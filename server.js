@@ -12,13 +12,14 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- [新增] 幽靈數字邏輯 (不影響原本功能) ---
+// --- [保持不變] 幽靈數字邏輯 ---
 let virtualBase = Math.floor(Math.random() * 3) + 3; 
 setInterval(() => {
     const change = Math.random() > 0.5 ? 1 : -1;
     virtualBase += change;
     if (virtualBase < 3) virtualBase = 3; 
     if (virtualBase > 6) virtualBase = 5; 
+    broadcastLobbyStats(); // 幽靈數字變動時也通知大家
 }, Math.random() * 300000 + 300000);
 
 let rooms = {};
@@ -37,20 +38,52 @@ function loadPuzzles() {
     }
 }
 
+// --- [核心修正] 定義全體廣播函數 ---
+const broadcastLobbyStats = () => {
+    const allRooms = Object.values(rooms);
+    // 計算所有房間內的總人數
+    const realPlayers = allRooms.reduce((sum, r) => sum + Object.keys(r.players).length, 0);
+    
+    // 使用 io.emit 確保「所有人」都收到更新，而不是只有當前那個人
+    io.emit('lobbyStats', { 
+        onlineCount: realPlayers + virtualBase,
+        roomCount: allRooms.length 
+    });
+};
+
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
     
-    // --- [新增] 進入大廳立刻發送人數資訊 ---
-    const sendLobbyStats = () => {
-        const allRooms = Object.values(rooms);
-        const realPlayers = allRooms.reduce((sum, r) => sum + Object.keys(r.players).length, 0);
-        socket.emit('lobbyStats', { 
-            onlineCount: realPlayers + virtualBase,
-            roomCount: allRooms.length 
-        });
-    };
-    sendLobbyStats();
+    // 1. 有人連線時，立刻觸發一次廣播讓全體數字更新
+    broadcastLobbyStats();
 
+    // --- 以下為原本的邏輯中應呼叫廣播的時機點 ---
+
+    // 範例：當玩家斷線時
+    socket.on('disconnect', () => {
+    // 找出該玩家原本在哪個房間
+    for (const rid in rooms) {
+        if (rooms[rid].players[socket.id]) {
+            const r = rooms[rid];
+            const n = r.players[socket.id];
+            delete r.players[socket.id];
+            r.occupiedNums = r.occupiedNums.filter(x => x !== n);
+            
+            if (Object.keys(r.players).length > 0) {
+                io.to(rid).emit('sync', r);
+            } else {
+                delete rooms[rid];
+            }
+            // 這裡不需要 socket.leave，因為連線已經斷了
+            break; 
+        }
+    }
+    // 關鍵：斷線後也要廣播，人數才會即時減少
+    broadcastLobbyStats();
+});
+
+    // 範例：當房間被創建或銷毀時，也要記得在對應的事件呼叫 broadcastLobbyStats();
+});
     // 重新回到草稿狀態 (原本功能)
     socket.on('backToDraft', (roomId) => {
         const room = rooms[roomId];
@@ -71,27 +104,32 @@ io.on('connection', (socket) => {
     });
 
     // 創建房間 (原本功能)
-    socket.on('createRoom', (data) => {
-        const puzzles = loadPuzzles();
-        const pCount = parseInt(data.p) || 2;
-        const diff = data.d ? data.d.toString() : "1";
-        const pList = puzzles[diff] || puzzles["1"];
-        const puzzle = pList[Math.floor(Math.random() * pList.length)];
-        const prefix = `${pCount}${diff}`;
-        roomCounters[prefix] = (roomCounters[prefix] || 0) + 1;
-        const roomId = prefix + roomCounters[prefix].toString().padStart(2, '0');
+socket.on('createRoom', (data) => {
+    const puzzles = loadPuzzles();
+    const pCount = parseInt(data.p) || 2;
+    const diff = data.d ? data.d.toString() : "1";
+    const pList = puzzles[diff] || puzzles["1"];
+    const puzzle = pList[Math.floor(Math.random() * pList.length)];
+    const prefix = `${pCount}${diff}`;
+    roomCounters[prefix] = (roomCounters[prefix] || 0) + 1;
+    const roomId = prefix + roomCounters[prefix].toString().padStart(2, '0');
 
-        rooms[roomId] = {
-            id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
-            phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
-            players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
-            board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
-            answer: puzzle.answer, lastError: null
-        };
-        socket.join(roomId);
-        socket.emit('joined', { roomId, pNum: 1, state: rooms[roomId] });
-        sendLobbyStats(); // 更新大廳人數
-    });
+    rooms[roomId] = {
+        id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
+        phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
+        players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
+        board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
+        answer: puzzle.answer, lastError: null
+    };
+    
+    socket.join(roomId);
+    socket.emit('joined', { roomId, pNum: 1, state: rooms[roomId] });
+
+    // --- 修正處 ---
+    // 刪除原本的 sendLobbyStats(); 
+    // 只留這行廣播，全體在線玩家（包含大廳的人）數字都會立刻跳動！
+    broadcastLobbyStats(); 
+});
 
     // 換題邏輯 (原本功能)
     socket.on('requestChangePuzzle', (roomId) => {
@@ -189,7 +227,7 @@ io.on('connection', (socket) => {
         } else {
             delete rooms[rid]; 
         }
-        sendLobbyStats();
+        broadcastLobbyStats();
     });
 
     socket.on('destroyRoom', (rid) => { 
