@@ -19,7 +19,7 @@ setInterval(() => {
     virtualBase += change;
     if (virtualBase < 3) virtualBase = 3; 
     if (virtualBase > 6) virtualBase = 5; 
-    broadcastLobbyStats(); // 幽靈數字變動時也通知大家
+    broadcastLobbyStats(); 
 }, Math.random() * 300000 + 300000);
 
 let rooms = {};
@@ -41,10 +41,7 @@ function loadPuzzles() {
 // --- [核心修正] 定義全體廣播函數 ---
 const broadcastLobbyStats = () => {
     const allRooms = Object.values(rooms);
-    // 計算所有房間內的總人數
     const realPlayers = allRooms.reduce((sum, r) => sum + Object.keys(r.players).length, 0);
-    
-    // 使用 io.emit 確保「所有人」都收到更新，而不是只有當前那個人
     io.emit('lobbyStats', { 
         onlineCount: realPlayers + virtualBase,
         roomCount: allRooms.length 
@@ -54,37 +51,28 @@ const broadcastLobbyStats = () => {
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
     
-    // 1. 有人連線時，立刻觸發一次廣播讓全體數字更新
+    // 1. 有人連線時廣播更新
     broadcastLobbyStats();
 
-    // --- 以下為原本的邏輯中應呼叫廣播的時機點 ---
-
-    // 範例：當玩家斷線時
     socket.on('disconnect', () => {
-    // 找出該玩家原本在哪個房間
-    for (const rid in rooms) {
-        if (rooms[rid].players[socket.id]) {
-            const r = rooms[rid];
-            const n = r.players[socket.id];
-            delete r.players[socket.id];
-            r.occupiedNums = r.occupiedNums.filter(x => x !== n);
-            
-            if (Object.keys(r.players).length > 0) {
-                io.to(rid).emit('sync', r);
-            } else {
-                delete rooms[rid];
+        for (const rid in rooms) {
+            if (rooms[rid].players[socket.id]) {
+                const r = rooms[rid];
+                const n = r.players[socket.id];
+                delete r.players[socket.id];
+                r.occupiedNums = r.occupiedNums.filter(x => x !== n);
+                if (Object.keys(r.players).length > 0) {
+                    io.to(rid).emit('sync', r);
+                } else {
+                    delete rooms[rid];
+                }
+                break; 
             }
-            // 這裡不需要 socket.leave，因為連線已經斷了
-            break; 
         }
-    }
-    // 關鍵：斷線後也要廣播，人數才會即時減少
-    broadcastLobbyStats();
-});
+        broadcastLobbyStats();
+    });
 
-    // 範例：當房間被創建或銷毀時，也要記得在對應的事件呼叫 broadcastLobbyStats();
-});
-    // 重新回到草稿狀態 (原本功能)
+    // 重新回到草稿狀態
     socket.on('backToDraft', (roomId) => {
         const room = rooms[roomId];
         if (room && room.players[socket.id] === 1) {
@@ -103,35 +91,30 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 創建房間 (原本功能)
-socket.on('createRoom', (data) => {
-    const puzzles = loadPuzzles();
-    const pCount = parseInt(data.p) || 2;
-    const diff = data.d ? data.d.toString() : "1";
-    const pList = puzzles[diff] || puzzles["1"];
-    const puzzle = pList[Math.floor(Math.random() * pList.length)];
-    const prefix = `${pCount}${diff}`;
-    roomCounters[prefix] = (roomCounters[prefix] || 0) + 1;
-    const roomId = prefix + roomCounters[prefix].toString().padStart(2, '0');
+    // 創建房間
+    socket.on('createRoom', (data) => {
+        const puzzles = loadPuzzles();
+        const pCount = parseInt(data.p) || 2;
+        const diff = data.d ? data.d.toString() : "1";
+        const pList = puzzles[diff] || puzzles["1"];
+        const puzzle = pList[Math.floor(Math.random() * pList.length)];
+        const prefix = `${pCount}${diff}`;
+        roomCounters[prefix] = (roomCounters[prefix] || 0) + 1;
+        const roomId = prefix + roomCounters[prefix].toString().padStart(2, '0');
 
-    rooms[roomId] = {
-        id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
-        phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
-        players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
-        board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
-        answer: puzzle.answer, lastError: null
-    };
-    
-    socket.join(roomId);
-    socket.emit('joined', { roomId, pNum: 1, state: rooms[roomId] });
+        rooms[roomId] = {
+            id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
+            phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
+            players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
+            board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
+            answer: puzzle.answer, lastError: null
+        };
+        socket.join(roomId);
+        socket.emit('joined', { roomId, pNum: 1, state: rooms[roomId] });
+        broadcastLobbyStats(); 
+    });
 
-    // --- 修正處 ---
-    // 刪除原本的 sendLobbyStats(); 
-    // 只留這行廣播，全體在線玩家（包含大廳的人）數字都會立刻跳動！
-    broadcastLobbyStats(); 
-});
-
-    // 換題邏輯 (原本功能)
+    // 換題邏輯
     socket.on('requestChangePuzzle', (roomId) => {
         const room = rooms[roomId];
         if (!room) return;
@@ -152,7 +135,7 @@ socket.on('createRoom', (data) => {
         }
     });
 
-    // 填字邏輯 (原本功能)
+    // 填字邏輯
     socket.on('fill', (data) => {
         const { roomId, index, val } = data;
         const room = rooms[roomId];
@@ -169,7 +152,7 @@ socket.on('createRoom', (data) => {
         }
     });
 
-    // 完成投票邏輯 (原本功能)
+    // 完成投票邏輯
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
         const room = rooms[roomId];
@@ -194,7 +177,7 @@ socket.on('createRoom', (data) => {
         io.to(roomId).emit('sync', room);
     });
 
-    // 基礎房間操作 (原本功能)
+    // 基礎房間操作
     socket.on('checkRoom', (rid) => { 
         if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); 
     });
@@ -205,7 +188,7 @@ socket.on('createRoom', (data) => {
             r.players[socket.id] = d.pNum; r.occupiedNums.push(d.pNum);
             socket.join(d.roomId); socket.emit('joined', { roomId: d.roomId, pNum: d.pNum, state: r });
             io.to(d.roomId).emit('sync', r);
-            sendLobbyStats();
+            broadcastLobbyStats(); // 改用廣播版
         }
     });
 
@@ -233,7 +216,7 @@ socket.on('createRoom', (data) => {
     socket.on('destroyRoom', (rid) => { 
         if(rooms[rid] && rooms[rid].players[socket.id] === 1) { 
             io.to(rid).emit('roomDestroyed'); delete rooms[rid]; 
-            sendLobbyStats();
+            broadcastLobbyStats(); // 改用廣播版
         } 
     });
 
@@ -244,9 +227,9 @@ socket.on('createRoom', (data) => {
         const content = `時間: ${new Date().toLocaleString()}\n原因: ${reason}\n房間: ${roomId}\n盤面: ${JSON.stringify(board)}\n`;
         fs.writeFile(path.join(ERROR_DIR, fileName), content, (err) => {});
     });
-});
+}); // <--- io.on('connection') 的大括號要在這裡才結束！
 
-// 驗證邏輯 (原本功能)
+// 驗證邏輯
 function validateSudoku6x6(b) {
     for (let i = 0; i < 6; i++) {
         let row = new Set(), col = new Set(), block = new Set();
@@ -261,7 +244,7 @@ function validateSudoku6x6(b) {
     return true;
 }
 
-// 伺服器啟動 (原本功能)
+// 伺服器啟動
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
     console.log('\x1b[36m%s\x1b[0m', '==============================================');
@@ -269,7 +252,7 @@ http.listen(PORT, '0.0.0.0', () => {
     console.log('\x1b[36m%s\x1b[0m', '==============================================');
 });
 
-// --- [新增] 營運監控小工具 (一小時更新一次) ---
+// 營運監控小工具
 setInterval(() => {
     const allRooms = Object.values(rooms);
     const realPlayers = allRooms.reduce((sum, r) => sum + Object.keys(r.players).length, 0);
