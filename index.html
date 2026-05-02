@@ -326,11 +326,10 @@
     <div class="modal-box">
         <h1 style="color:var(--green); font-size:50px; margin:0;">🏆</h1>
         <h2>完美通關！</h2>
-        
+        請耐心等待房主回到準備畫面...<br>
         <button id="btn-next-game" class="btn-main" style="display:none;" 
-                onclick="socket.emit('backToDraft', myRoomId)">開啟下一局👉</button>
-        
-        <button class="btn-exit-trigger" onclick="socket.emit('leaveRoom', myRoomId)">回到大廳</button>
+                onclick="socket.emit('backToDraft', myRoomId)">開啟下一局👉</button>        
+        <button class="btn-exit-trigger" onclick="socket.emit('leaveRoom', myRoomId)">回到大廳(離開房間)</button>
         
     </div>
 </div>
