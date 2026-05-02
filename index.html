@@ -200,13 +200,14 @@
         <div class="notice-title">📢 系統公告</div>
         <div class="notice-content">
             Welcome To <b>連線數獨第一品牌</b><br>
-            • 💡 <span onclick="openModal('guide-modal')" style="color: var(--purple); font-weight: bold; text-decoration: underline; cursor: pointer;">點我查看玩法教學</span><br>
-            • <b>回報問題</b>：若題目有誤請回報。<br>
+            • 💡 <span onclick="openModal('guide-modal')" style="color: var(--purple); font-weight: bold; text-decoration: underline; cursor: pointer;">點我查看新手教學</span><br>
+            • 覺得題目很🦐可以投票換題。<br>
+            • <b>回報問題</b>：若題目有誤請回報給我們。<br>
             • 目前題庫共有 50 題可挑戰！<br>
-            <span style="font-size: 11px; color: #999;">更新：115/5/2</span>
+            <span style="font-size: 15px; color: #999;">最近更新：115/5/2</span>
             
             <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee;">
-                <img src="sudokuQRcode.png" style="width: 50px; height: 50px; border-radius: 4px; background: white;" alt="QR">
+                <img src="sudokuQRcode.png" style="width: 70px; height: 70px; border-radius: 4px; background: white;" alt="QR">
                 <div style="text-align: left;">
                     <b style="font-size: 13px; color: #333;">📲 快速邀請</b><br>
                     <span style="font-size: 11px; color: #666;">掃碼立即加入對戰</span>
@@ -256,8 +257,8 @@
 
 <div id="guide-modal" class="modal-overlay">
     <div class="modal-box" style="width: 85%; max-width: 400px;">
-        <h3>🎮 玩法教學</h3>
-        <p style="text-align:left; font-size:14px; color:#666;">每行、每列、以及粗線方格內的 6 格數字都必須包含 1-6 且不重複。輪到你時點擊空格再按數字即可填入！</p>
+        <h3>🎮新手教學</h3>
+        <p style="text-align:left; font-size:18px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
         <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
     </div>
 </div>
@@ -288,6 +289,7 @@
     <div class="modal-box">
         <h1 style="font-size:50px;">🏆</h1>
         <h2>完美通關！</h2>
+        請等待房主回到準備畫面....<br>
         <button id="btn-next-game" class="btn-main" style="display:none;" onclick="socket.emit('backToDraft', myRoomId)">下一局👉</button>
         <button class="btn-exit-trigger" onclick="socket.emit('leaveRoom', myRoomId)">回大廳</button>
     </div>
