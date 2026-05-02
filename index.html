@@ -139,9 +139,52 @@
         @media (max-width: 800px) {
             .lobby-container { flex-direction: column; align-items: center; margin-top: 10px; }
             .lobby-box, .notice-board { width: 90%; max-width: 400px; }
-            :root { --cell: 50px; }
+            :root { --cell: 15.5vw; } /* 自動根據手機寬度縮放格子大小 */
+
+            /* 遊戲介面調整 */
+            #game-ui { 
+                flex-direction: column; 
+                align-items: center; 
+                gap: 10px; 
+            }
+
+            .side-panel { 
+                width: 95%; 
+                display: flex; 
+                flex-direction: column; 
+            }
+
+            /* 1. 數字小鍵盤：設定 order 為 1，讓它排在最前面 */
+            .keypad { 
+                order: 1; 
+                grid-template-columns: repeat(3, 1fr); 
+                margin: 5px 0 15px 0;
+            }
+            .n-btn {
+                padding: 20px 0; /* 手機版加高按鈕，更好按 */
+                font-size: 24px;
+            }
+
+            /* 2. 狀態 banner (輪到誰)：設定 order 為 2 */
+            .status-banner { 
+                order: 2; 
+                font-size: 16px;
+                padding: 10px;
+            }
+
+            /* 3. 房間資訊與成員：設定 order 為 3，放到最後面 */
+            .member-area, #room-id-display { 
+                order: 3; 
+                font-size: 12px;
+                margin-top: 5px;
+            }
+
+            /* 4. 退出按鈕等雜項 */
+            .btn-exit-trigger {
+                order: 4;
+            }
         }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
     </style>
 </head>
 <body>
@@ -206,7 +249,7 @@
             • 使用電腦體驗更佳！<br>
             • 作者時不時就會進行版本更新，記得刷新頁面喔！<br>
             • 出題、9x9模式等，敬請期待後續更新😎<br>
-            • 上次更新：115/5/2，更新項目：回報功能<br>
+            • 上次更新：115/5/2，更新項目：判定功能<br>
         </div>
     </div>
 </div>
@@ -256,6 +299,7 @@
         <h3 style="color:var(--purple);">🎮新手教學</h3>
         <div style="text-align: left; font-size: 14px; color: #555; line-height: 1.8;">
             1. <b>數獨的規則</b>：同行、同列及粗線框內數字不可重複。<br>
+            　 用人話說就是<b>每六格、直行、橫列都要有123456</b>啦。<br>
             2. <b>創建遊戲</b>：<b>選擇玩家數</b>及<b>題目難度</b>，將 4 位數房號告知好友。<br>
             3. <b>加入遊戲</b>：輸入正確房號，選擇玩家編號。所有玩家準備後才會開始喔！<br>
             4. <b>輪到你時才能操作盤面！</b>如果有人掛機請肘擊他。<br>
@@ -365,23 +409,50 @@
         document.getElementById('rid-txt').innerText = "房號：" + s.id;
         document.getElementById('pnum-txt').innerText = myNum + " 號";
         document.getElementById('report-link').style.display = (s.puzzleId !== "--") ? 'block' : 'none';
+        
         const ml = document.getElementById('member-list-content');
         ml.innerHTML = s.occupiedNums.sort((a,b)=>a-b).map(n => `<span class="member-badge">${n}號 ${n===1?'👑':''}</span>`).join('');
+        
         const th = s.maxPlayers === 1 ? 1 : Math.ceil((s.maxPlayers + 1) / 2);
         document.getElementById('change-count').innerText = `${s.changeRequests?.length || 0}/${th}`;
+        
         const changeBtn = document.getElementById('change-btn');
         if (s.phase === 'DRAFTING' || s.phase === 'SOLVING') {
-            changeBtn.style.display = 'block'; changeBtn.disabled = s.changeRequests.includes(myNum);
-        } else { changeBtn.style.display = 'none'; }
-        if(s.phase === 'RESULT') { closeModal('complete-modal'); openModal('success-modal'); document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none'; return; }
+            changeBtn.style.display = 'block'; 
+            changeBtn.disabled = s.changeRequests.includes(myNum);
+        } else { 
+            changeBtn.style.display = 'none'; 
+        }
+
+        if(s.phase === 'RESULT') { 
+            closeModal('complete-modal'); 
+            openModal('success-modal'); 
+            document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none'; 
+            return; 
+        }
+
         document.getElementById('complete-modal').style.display = s.phase === 'CHECKING' ? 'flex' : 'none';
-        if(s.phase === 'CHECKING') document.getElementById('vote-status').innerText = `同意人數：${s.completeVotes.length} / ${th}`;
+        if(s.phase === 'CHECKING') {
+            document.getElementById('vote-status').innerText = `同意人數：${s.completeVotes.length} / ${th}`;
+        }
+
         if(s.phase === 'DRAFTING') {
             document.getElementById('status-txt').innerText = `等待中 (${s.readyPlayers.length}/${s.maxPlayers})`;
-            document.getElementById('ready-btn').style.display = 'block'; document.getElementById('ready-btn').disabled = s.readyPlayers.includes(myNum);
+            document.getElementById('ready-btn').style.display = 'block'; 
+            document.getElementById('ready-btn').disabled = s.readyPlayers.includes(myNum);
             document.getElementById('control-area').style.display = 'none';
         } else {
-            document.getElementById('status-txt').innerHTML = `輪到 <span style="color:red">${s.turn}號</span>`;
+            // --- 修改這部分：加入錯誤提示判斷 ---
+            const statusTxt = document.getElementById('status-txt');
+            if (s.phase === 'SOLVING' && s.lastError) {
+                // 如果後端傳來錯誤訊息，顯示紅色警告
+                statusTxt.innerHTML = `<span style="color: var(--red); font-weight: bold;">⚠️ ${s.lastError}</span>`;
+            } else {
+                // 正常顯示輪到誰
+                statusTxt.innerHTML = `輪到 <span style="color:var(--purple)">${s.turn}號</span>`;
+            }
+            // ----------------------------------
+            
             document.getElementById('ready-btn').style.display = 'none';
             document.getElementById('control-area').style.display = 'block';
             document.getElementById('control-area').style.opacity = (s.turn === myNum) ? 1 : 0.4;
@@ -424,6 +495,7 @@
     });
 
     socket.on('sync', s => syncUI(s));
+
     socket.on('roomDestroyed', () => { alert("房間已解散"); location.reload(); });
     socket.on('left', () => location.reload());
 </script>
