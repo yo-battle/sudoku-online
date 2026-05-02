@@ -3,12 +3,18 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const fs = require('fs');
-const path = require('path');
+const path = require('path'); // 提到前面，確保後面能使用
 const os = require('os');
 
-// 設定靜態檔案資料夾
-app.use(express.static('public'));
+// 1. 設定靜態檔案讀取（重要：讓 Render 找得到你的 index.html 和其他檔案）
+app.use(express.static(__dirname));
 
+// 2. 設定首頁路由
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// --- 以下是你原本的邏輯 ---
 let rooms = {};
 let roomCounters = {}; 
 
