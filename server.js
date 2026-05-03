@@ -113,18 +113,27 @@ io.on('connection', (socket) => {
     socket.on('createRoom', (data) => {
         const puzzles = loadPuzzles();
         const pCount = parseInt(data.p) || 2;
-        const diff = data.d ? data.d.toString() : "1";
+        const diff = data.d ? data.d.toString() : "1"; // 這裡的 diff 就是 1, 2 或 3
+        
+        // 從對應題庫抓題
         const pList = puzzles[diff] || puzzles["1"];
         const puzzle = pList[Math.floor(Math.random() * pList.length)];
-        const prefix = `${pCount}${diff}`;
+        
+        // --- 房號生成邏輯：人數 + 題庫號 + 流水號 ---
+        const prefix = `${pCount}${diff}`; 
         roomCounters[prefix] = (roomCounters[prefix] || 0) + 1;
+        // 如果流水號超過 99，會自動變成 3 位數，維持 4-5 位數房號
         const roomId = prefix + roomCounters[prefix].toString().padStart(2, '0');
 
         rooms[roomId] = {
             id: roomId, maxPlayers: pCount, difficulty: diff, puzzleId: puzzle.id,
             phase: 'DRAFTING', readyPlayers: [], changeRequests: [], completeVotes: [],
             players: { [socket.id]: 1 }, occupiedNums: [1], turn: 1,
-            board: puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' })),
+            // 這裡會正確把 '7' 轉成數字 7，前端 renderBoard 就會把它畫成牆壁
+            board: puzzle.data.split('').map(num => ({ 
+                val: num !== '0' ? parseInt(num) : null, 
+                isFixed: num !== '0' 
+            })),
             answer: puzzle.answer, 
             lastError: null
         };
