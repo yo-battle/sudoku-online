@@ -129,6 +129,29 @@
             background-color: white;
         }
 
+        .cell.fixed {
+            color: #000;
+            background-color: #f0f0f0;
+        }
+
+        /* 修改後的牆壁樣式 */
+        .cell.wall {
+            color: #e0e0e0 !important;      /* 讓文字顏色與背景色完全相同 (達成隱形) */
+            background-color: #e0e0e0 !important; /* 牆壁的灰色背景 */
+            cursor: default;                /* 滑鼠移上去不要顯示手指 */
+            user-select: none;              /* 防止玩家選取到文字 */
+            border: 0.5px solid #ccc;       /* 保持邊框一致感 */
+        }
+        /* 在 style 標籤裡找到 .cell.wall，確保它能蓋掉 .fixed */
+        .cell.wall {
+            color: #e0e0e0 !important;
+            background-color: #e0e0e0 !important;
+            cursor: default;
+            user-select: none;
+            border: 0.5px solid #ccc;
+            pointer-events: none; /* 新增：讓牆壁連點擊判斷都直接穿透，更省資源 */
+        }
+
         .cell.selected { background: #e3f2fd; outline: 2px solid var(--blue); z-index: 5; }
 
         .side-panel { width: 340px; display: flex; flex-direction: column; gap: 15px; }
@@ -368,14 +391,24 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function sendReport(reason) {
-        const formID = "1hxqrXqmpRtaVVw8tU9e1QJmesnf4IixdfxZU18N2CI8"; 
-        const entryID = "entry.260725270"; 
+        const formID = "1hxqrXqmpRtaVVw8tU9e1QJmesnf4IixdfxZU18N2CI8";
+        const entryID = "entry.260725270";
         const params = new URLSearchParams();
-        params.append(entryID, JSON.stringify({roomId:myRoomId, reason:reason, board:lastBoard}));
+        params.append(entryID, JSON.stringify({
+            roomId: myRoomId,
+            reason: reason,
+            board: lastBoard
+        }));
+
         fetch(`https://docs.google.com/forms/d/${formID}/formResponse`, {
-            method: "POST", mode: "no-cors", body: params
-        }).then(() => { closeModal('report-modal'); alert("回報成功"); });
-    }
+            method: "POST",
+            mode: "no-cors",
+            body: params
+        }).then(() => {
+            closeModal('report-modal');
+            alert("回報成功");
+        });
+    } // <--- 確保 sendReport 在這裡結束
 
     function syncUI(s) {
         lastBoard = s.board;
@@ -383,73 +416,98 @@
         document.getElementById('rid-txt').innerText = "房號：" + s.id;
         document.getElementById('pnum-txt').innerText = myNum + " 號";
         document.getElementById('report-link').style.display = (s.puzzleId !== "--") ? 'block' : 'none';
-        
+
         document.getElementById('destroy-btn').style.display = (myNum === 1) ? 'inline-block' : 'none';
         document.getElementById('leave-btn').style.display = (myNum !== 1) ? 'inline-block' : 'none';
 
         const ml = document.getElementById('member-list-content');
-        ml.innerHTML = s.occupiedNums.sort((a,b)=>a-b).map(n => `<span class="member-badge">${n}號 ${n===1?'👑':''}</span>`).join('');
-        
+        ml.innerHTML = s.occupiedNums.sort((a, b) => a - b).map(n => 
+            `<span class="member-badge">${n}號 ${n === 1 ? '👑' : ''}</span>`
+        ).join('');
+
         const th = s.maxPlayers === 1 ? 1 : Math.ceil((s.maxPlayers + 1) / 2);
         document.getElementById('change-count').innerText = `${s.changeRequests?.length || 0}/${th}`;
-        
+
         const changeBtn = document.getElementById('change-btn');
         if (s.phase === 'DRAFTING' || s.phase === 'SOLVING') {
-            changeBtn.style.display = 'block'; 
+            changeBtn.style.display = 'block';
             changeBtn.disabled = s.changeRequests.includes(myNum);
-        } else { changeBtn.style.display = 'none'; }
+        } else {
+            changeBtn.style.display = 'none';
+        }
 
-        if(s.phase === 'RESULT') { closeModal('complete-modal'); openModal('success-modal'); document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none'; return; }
-        document.getElementById('complete-modal').style.display = s.phase === 'CHECKING' ? 'flex' : 'none';
+        if (s.phase === 'RESULT') {
+            closeModal('complete-modal');
+            openModal('success-modal');
+            document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none';
+            return;
+        }
         
-        if(s.phase === 'DRAFTING') {
-            document.getElementById('status-txt').innerText = `等待中 (${s.readyPlayers.length}/${s.maxPlayers})`;
-            document.getElementById('ready-btn').style.display = 'block'; 
+        document.getElementById('complete-modal').style.display = (s.phase === 'CHECKING' ? 'flex' : 'none');
+
+        // --- 狀態橫幅邏輯 ---
+        const statusBanner = document.getElementById('status-txt');
+        if (s.phase === 'DRAFTING') {
+            statusBanner.innerText = `等待中 (${s.readyPlayers.length}/${s.maxPlayers})`;
+            document.getElementById('ready-btn').style.display = 'block';
             document.getElementById('ready-btn').disabled = s.readyPlayers.includes(myNum);
             document.getElementById('control-area').style.display = 'none';
             closeModal('success-modal');
         } else {
-            document.getElementById('status-txt').innerHTML = `輪到 <span style="color:var(--purple)">${s.turn}號</span>`;
+            if (s.lastError) {
+                statusBanner.innerHTML = `<span style="color:var(--red)">⚠️ ${s.lastError}</span>`;
+            } else {
+                statusBanner.innerHTML = `輪到 <span style="color:var(--purple)">${s.turn}號</span>`;
+            }
+
             document.getElementById('ready-btn').style.display = 'none';
             document.getElementById('control-area').style.display = 'block';
-            document.getElementById('control-area').style.opacity = (s.turn === myNum) ? 1 : 0.4;
-            document.getElementById('control-area').style.pointerEvents = (s.turn === myNum) ? 'auto' : 'none';
+            document.getElementById('control-area').style.opacity = (s.turn === myNum ? 1 : 0.4);
+            document.getElementById('control-area').style.pointerEvents = (s.turn === myNum ? 'auto' : 'none');
         }
-        renderBoard(s);
-    }
 
-    function renderBoard(s) {
-    const b = document.getElementById('board'); 
-    b.innerHTML = '';
-    
-    s.board.forEach((c, i) => {
-        const d = document.createElement('div');
-        d.className = 'cell';
+        renderBoard(s);
+    }        
+        function renderBoard(s) {
+        const b = document.getElementById('board'); 
+        b.innerHTML = '';
         
-        // 只要是固定格就上灰色背景 (包含數值為 7 的格子)
-        if (c.isFixed) d.classList.add('fixed');
-        if (i === selectedIdx) d.classList.add('selected');
-        
-        // 處理 6x6 的粗邊框線
-        if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
-        
-        // 直接顯示數值，管它是 1 還是 7，一視同仁
-        if (c.val) {
-            d.innerHTML = `<span style="color:${c.isFixed ? '#000' : 'var(--purple)'}">${c.val}</span>`;
-        } else {
-            d.innerHTML = '';
-        }
-        
-        // 點擊邏輯：同樣只有非固定格能點
-        d.onclick = () => { 
-            if(!c.isFixed) { 
-                selectedIdx = i; 
-                renderBoard(s); 
-            } 
-        };
-        b.appendChild(d);
-    });
-}
+        s.board.forEach((c, i) => {
+            const d = document.createElement('div');
+            d.className = 'cell';
+            
+            // 處理 6x6 的粗邊框線
+            if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
+
+            // --- 核心邏輯修改開始 ---
+            if (c.val === 7) {
+                // 如果數值是 7，它是牆壁
+                d.classList.add('wall');
+                d.innerHTML = ''; // 確保文字清空，不顯示 7
+            } else {
+                // 一般數字邏輯
+                if (c.isFixed) d.classList.add('fixed');
+                if (i === selectedIdx) d.classList.add('selected');
+
+                if (c.val) {
+                    d.innerHTML = `<span style="color:${c.isFixed ? '#000' : 'var(--purple)'}">${c.val}</span>`;
+                } else {
+                    d.innerHTML = '';
+                }
+
+                // 只有非牆壁且非固定的格子才能被點擊
+                d.onclick = () => { 
+                    if(!c.isFixed) { 
+                        selectedIdx = i; 
+                        renderBoard(s); 
+                    } 
+                };
+            }
+            // --- 核心邏輯修改結束 ---
+
+            b.appendChild(d);
+        });
+    }
 
     function fill(v) { if(selectedIdx !== null) socket.emit('fill', {roomId:myRoomId, index:selectedIdx, val:v}); }
 
