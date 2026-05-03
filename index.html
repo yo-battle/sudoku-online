@@ -152,7 +152,18 @@
         .member-area { background: rgba(255,255,255,0.7); padding: 12px; border-radius: 12px; border: 1px dashed #ccc; }
         .member-badge { display: inline-block; padding: 5px 12px; background: white; border-radius: 20px; margin: 4px; border: 1px solid #eee; font-size: 13px; }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; }
+.modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100vw; /* 改成視窗寬度 */
+    height: 100vh; /* 改成視窗高度 */
+    background: rgba(0,0,0,0.7); 
+    display: none; 
+    justify-content: center; 
+    align-items: center; 
+    z-index: 9999 !important; /* 最高的權威 */
+}        
         .modal-box { background: white; padding: 30px; border-radius: 24px; text-align: center; width: 320px; }
         .report-opt { display: block; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #eee; border-radius: 12px; cursor: pointer; font-weight: bold; }
         .btn-exit-trigger { background: none; border: none; color: var(--gray); text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 15px; }
@@ -206,6 +217,15 @@
     </style>
 </head>
 <body>
+<div id="guide-modal" class="modal-overlay">
+    <div class="modal-box" style="width: 85%; max-width: 400px;">
+        <h3>🎮新手教學</h3>
+        <p style="text-align:left; font-size:16px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
+        <p style="text-align:left; font-size:16px; color:#666;"><b>本遊戲需合作答題</b>。如果你的隊友掛機，請肘擊他。</p>
+
+        <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
+    </div>
+</div>
 
 <div class="lobby-container" id="lobby-root">
     <div id="lobby" class="lobby-box">
@@ -321,16 +341,6 @@
     </div>
 </div>
 
-<div id="guide-modal" class="modal-overlay">
-    <div class="modal-box" style="width: 85%; max-width: 400px;">
-        <h3>🎮新手教學</h3>
-        <p style="text-align:left; font-size:16px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
-        <p style="text-align:left; font-size:16px; color:#666;"><b>本遊戲需合作答題</b>。如果你的隊友掛機，請肘擊他。</p>
-
-        <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
-    </div>
-</div>
-
 <div id="report-modal" class="modal-overlay">
     <div class="modal-box">
         <h3>回報問題</h3>
@@ -377,8 +387,16 @@
     let myRoomId, myNum, selectedIdx, config = { p: 2, d: 1 }, lastBoard = null, lobbyRid = "";
 
     function openModal(id) { 
-    document.getElementById(id).style.display = 'flex'; 
-}    
+    console.log("嘗試開啟視窗:", id); // 偵錯用
+    const target = document.getElementById(id);
+    if (target) {
+        target.style.visibility = 'visible';
+        target.style.opacity = '1';
+        target.style.display = 'flex'; 
+    } else {
+        console.error("找不到該視窗的 ID，請檢查 HTML 是否有 id='" + id + "'");
+    }
+}  
     function switchTab(t) {
         document.getElementById('tab-create').classList.toggle('active', t === 'create');
         document.getElementById('tab-join').classList.toggle('active', t === 'join');
