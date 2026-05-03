@@ -245,55 +245,38 @@ io.on('connection', (socket) => {
 });
 
 // 在 io.on 外部定義檢查邏輯
+// --- 修正後的完整驗證邏輯 ---
+
 function validateSudoku6x6(b) {
     for (let i = 0; i < 6; i++) {
-        // 1. 抓取這三組資料：橫行、直列、宮格
-        let rowArr = [];
-        let colArr = [];
-        let blockArr = [];
+        let rowArr = [], colArr = [], blockArr = [];
 
         for (let j = 0; j < 6; j++) {
-            // 橫行
+            // 1. 抓取資料
             rowArr.push(b[i * 6 + j]);
-            // 直列
             colArr.push(b[j * 6 + i]);
-            // 2x3 宮格
             let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
             let bc = (i % 2) * 3 + (j % 3);
             blockArr.push(b[br * 6 + bc]);
         }
 
-        // 2. 定義內部的檢查函數
+        // 2. 定義內部的檢查函數（閉包）
         const isGroupValid = (arr) => {
-            // 使用 == 確保字串 "7" 也能通過
             const count7 = arr.filter(n => n == 7).length; 
             const maxAllowed = 6 - count7;
-
             let seen = new Set();
+
             for (let num of arr) {
-                if (num == 7) continue;
-
-                // 修正點：定義 val 並確保它是數字
-                const val = parseInt(num);
-
-                // 檢查是否為有效數字、是否在 1 到 maxAllowed 之間
-                if (isNaN(val) || val < 1 || val > maxAllowed) return false;
+                if (num == 7) continue; // 鬼牌跳過
                 
-                // 檢查是否重複
+                const val = parseInt(num);
+                // 檢查範圍與是否重複
+                if (isNaN(val) || val < 1 || val > maxAllowed) return false;
                 if (seen.has(val)) return false;
                 seen.add(val);
             } 
-                
-            // 檢查該組是否填滿了所有應有的數字數量
-            if (seen.size !== maxAllowed) return false;
-
-            return true;
-        };
-            // 檢查該組是否填滿了所有應有的數字 (1 到 maxAllowed)
-            // 這是為了確保玩家沒有漏掉數字或是填了無效組合
-            if (seen.size !== maxAllowed) return false;
-
-            return true;
+            // 必須剛好填滿該組剩下的白格數量
+            return seen.size === maxAllowed;
         };
 
         // 3. 執行三向檢查
