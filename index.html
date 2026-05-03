@@ -134,22 +134,15 @@
             background-color: #f0f0f0;
         }
 
-        /* 修改後的牆壁樣式 */
-        .cell.wall {
-            color: #e0e0e0 !important;      /* 讓文字顏色與背景色完全相同 (達成隱形) */
-            background-color: #e0e0e0 !important; /* 牆壁的灰色背景 */
-            cursor: default;                /* 滑鼠移上去不要顯示手指 */
-            user-select: none;              /* 防止玩家選取到文字 */
-            border: 0.5px solid #ccc;       /* 保持邊框一致感 */
-        }
-        /* 在 style 標籤裡找到 .cell.wall，確保它能蓋掉 .fixed */
+        /* 合併後的牆壁樣式，更簡潔且確保優先權 */
         .cell.wall {
             color: #e0e0e0 !important;
             background-color: #e0e0e0 !important;
             cursor: default;
             user-select: none;
             border: 0.5px solid #ccc;
-            pointer-events: none; /* 新增：讓牆壁連點擊判斷都直接穿透，更省資源 */
+            pointer-events: none; /* 讓點擊直接穿透 */
+            font-size: 0; /* 萬一顏色沒對準，讓字直接縮到看不見，徹底隱形 */
         }
 
         .cell.selected { background: #e3f2fd; outline: 2px solid var(--blue); z-index: 5; }
@@ -186,6 +179,29 @@
 
     .keypad { margin: 5px 0 10px 0; gap: 8px; }
     .n-btn { padding: 10px 0 !important; font-size: 22px; height: auto !important; }
+}
+    /* 讓「異世界」按鈕選中時有一種虛擬空間的魔法感 */
+#d-opts .opt-btn:nth-child(3).active {
+    border: 2px dashed #8C00FF !important; /* 強制使用紫色虛線 */
+    background-color: rgba(140, 0, 255, 0.1) !important; /* 淡淡的紫色底 */
+    color: #8C00FF !important;
+    animation: portal-pulse 1.5s infinite; /* 呼叫下方的動畫 */
+}
+
+/* 定義閃爍動畫：產生一種傳送門的發光效果 */
+@keyframes portal-pulse {
+    0% {
+        box-shadow: 0 0 5px rgba(140, 0, 255, 0.4);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(140, 0, 255, 0.8);
+        transform: scale(1.02); /* 微幅膨脹，增加動感 */
+    }
+    100% {
+        box-shadow: 0 0 5px rgba(140, 0, 255, 0.4);
+        transform: scale(1);
+    }
 }
     </style>
 </head>
@@ -360,6 +376,9 @@
     const socket = io();
     let myRoomId, myNum, selectedIdx, config = { p: 2, d: 1 }, lastBoard = null, lobbyRid = "";
 
+    function openModal(id) { 
+    document.getElementById(id).style.display = 'flex'; 
+}    
     function switchTab(t) {
         document.getElementById('tab-create').classList.toggle('active', t === 'create');
         document.getElementById('tab-join').classList.toggle('active', t === 'join');
@@ -375,8 +394,8 @@
     function setVal(k, v) { 
         config[k] = v; 
         document.querySelectorAll(`#${k}-opts .opt-btn`).forEach(b => {
-            const valInBtn = parseInt(b.innerText);
-            b.classList.toggle('active', valInBtn === v);
+            const isMatch = b.getAttribute('onclick').includes(v);
+            b.classList.toggle('active', isMatch);
         });
     }
 
@@ -388,7 +407,6 @@
     }
 
     function doCheck() { if(lobbyRid) socket.emit('checkRoom', lobbyRid); }
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function sendReport(reason) {
