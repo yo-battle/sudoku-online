@@ -109,37 +109,41 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('sync', room);
         }
     });
-
-    // 填字邏輯 (已加上安全檢查)
+// 填字邏輯 (已加上安全檢查)
     socket.on('fill', (data) => {
         const { roomId, index, val } = data;
         const room = rooms[roomId];
         
-        // 1. 基本檢查：房間是否存在、是否在解題階段
         if (!room || room.phase !== 'SOLVING') return;
         
-        // 2. 安全檢查：確保 index 在 0~35 之間且該位置真的存在
         if (index === null || index < 0 || !room.board[index]) {
             console.error(`⚠️ 收到無效的索引: ${index}`);
             return; 
         }
 
-        // 3. 檢查是否輪到該玩家，且該格不是固定數字
         if (room.turn === room.players[socket.id] && !room.board[index].isFixed) {
             room.board[index].val = val;
             room.lastError = null; 
 
-            if (room.board.every(cell => cell.val !== null)) { 
+            // --- 重點修改區域：重新定義「填滿」的標準 ---
+            const isAllFilled = room.board.every(cell => {
+                // 如果是題目預設的 7，我們直接判定為「已填滿」
+                if (cell.isFixed && cell.val === 7) return true;
+                // 其餘格子必須要有值（不是 null）
+                return cell.val !== null;
+            });
+
+            if (isAllFilled) { 
                 room.phase = 'CHECKING'; 
                 room.completeVotes = []; 
             } else { 
                 room.turn = (room.turn % room.maxPlayers) + 1; 
             }
+            // ------------------------------------------
+
             io.to(roomId).emit('sync', room);
         }
-    });
-
-    // 完成投票邏輯
+    });    // 完成投票邏輯
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
         const room = rooms[roomId]; // 1. 先抓出房間

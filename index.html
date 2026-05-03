@@ -124,11 +124,11 @@
         .cell.fixed { background: #f0f0f0; font-weight: bold; }
         /* --- 新增：隱形鬼牌樣式 --- */
         .cell.ghost {
-            background-color: #f0f0f0 !important; /* 強制背景與普通固定格一致 */
-            color: transparent !important;        /* 讓數字 7 隱形 */
-            cursor: default;                      /* 滑鼠游標不變 */
-            pointer-events: none;                 /* 關鍵：讓點擊穿透，玩家點不到這格 */
-            border: 0.5px solid #e0e0e0;          /* 稍微淡化邊框，讓圖形主體更明顯 */
+            background-color: #a0a0a0 !important; /* 加深到明顯的灰色 */
+            color: transparent !important;
+            cursor: default;
+            pointer-events: none;
+            border: 1px solid #888 !important;   /* 邊框也加深，與背景區分 */
         }
 
         /* 確保非鬼牌的白格在特殊題型中依然清楚 */
