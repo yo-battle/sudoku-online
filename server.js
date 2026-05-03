@@ -166,31 +166,50 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 填字邏輯
+    // 填字邏輯 (強化安全版)
     socket.on('fill', (data) => {
         const { roomId, index, val } = data;
         const room = rooms[roomId];
+
+        // 1. 基礎存在檢查
         if (!room || room.phase !== 'SOLVING') return;
         
-        if (index === null || index < 0 || !room.board[index]) return;
+        // 2. 玩家身份與回合檢查 (防止非當前玩家或路人填值)
+        const pNum = room.players[socket.id];
+        if (!pNum || room.turn !== pNum) return;
 
-        if (room.turn === room.players[socket.id] && !room.board[index].isFixed) {
-            room.board[index].val = val;
-            room.lastError = null; 
-
-            // 檢查全盤是否填滿
-            const isAllFilled = room.board.every(cell => cell.val !== null);
-
-            if (isAllFilled) { 
-                room.phase = 'CHECKING'; 
-                room.completeVotes = []; 
-            } else { 
-                room.turn = (room.turn % room.maxPlayers) + 1; 
-            }
-            io.to(roomId).emit('sync', room);
+        // 3. 數值合法性檢查 (最高防禦等級)
+        // 只允許 1-6，異世界模式額外允許 7 (牆壁)
+        const allowedValues = [1, 2, 3, 4, 5, 6, 7];
+        if (!allowedValues.includes(val)) {
+            console.log(`[警報] 攔截非法數值填入: ${val} 來自 ${socket.id}`);
+            return;
         }
-    });  
-  
+
+        // 4. 索引位置與固定格檢查
+        // 確保 index 是數字，且在 0-35 之間，並且該格不是題目預設的 Fixed
+        if (typeof index !== 'number' || index < 0 || index >= 36) return;
+        if (!room.board[index] || room.board[index].isFixed) return;
+
+        // --- 通過所有門檻，開始處理邏輯 ---
+        
+        room.board[index].val = val;
+        room.lastError = null; 
+
+        // 檢查全盤是否填滿 (排除 null 的情況)
+        const isAllFilled = room.board.every(cell => cell.val !== null);
+
+        if (isAllFilled) { 
+            room.phase = 'CHECKING'; 
+            room.completeVotes = []; 
+        } else { 
+            // 切換回合邏輯
+            room.turn = (room.turn % room.maxPlayers) + 1; 
+        }
+
+        // 同步狀態給房間內所有人
+        io.to(roomId).emit('sync', room);
+    });
     // 投票完成
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;

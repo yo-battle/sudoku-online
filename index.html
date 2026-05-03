@@ -179,7 +179,7 @@
         @media (max-width: 800px) {
     .lobby-container { flex-direction: column; align-items: center; margin-top: 10px; }
     .lobby-box, .notice-board { width: 90%; max-width: 400px; }
-    :root { --cell: 15.5vw; } 
+    :root { --cell: min(14.5vw, 60px); }
     #game-ui { flex-direction: column; align-items: center; gap: 10px; }
     
     .side-panel { 
@@ -394,17 +394,12 @@
     const socket = io();
     let myRoomId, myNum, selectedIdx, config = { p: 2, d: 1 }, lastBoard = null, lobbyRid = "";
 
-    function openModal(id) { 
-    console.log("嘗試開啟視窗:", id); // 偵錯用
+    function openModal(id) {
     const target = document.getElementById(id);
     if (target) {
-        target.style.visibility = 'visible';
-        target.style.opacity = '1';
-        target.style.display = 'flex'; 
-    } else {
-        console.error("找不到該視窗的 ID，請檢查 HTML 是否有 id='" + id + "'");
+        target.style.display = 'flex';
     }
-}  
+}
     function switchTab(t) {
         document.getElementById('tab-create').classList.toggle('active', t === 'create');
         document.getElementById('tab-join').classList.toggle('active', t === 'join');
@@ -433,7 +428,12 @@
     }
 
     function doCheck() { if(lobbyRid) socket.emit('checkRoom', lobbyRid); }
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function closeModal(id) {
+        const target = document.getElementById(id);
+        if (target) {
+            target.style.display = 'none';
+        }
+    }
 
     function sendReport(reason) {
         const formID = "1hxqrXqmpRtaVVw8tU9e1QJmesnf4IixdfxZU18N2CI8";
@@ -481,15 +481,27 @@
             changeBtn.style.display = 'none';
         }
 
+        // --- 投票與結算邏輯精緻化 ---
+
+        // 1. 優先處理「通關成功」 (RESULT)
         if (s.phase === 'RESULT') {
-            closeModal('complete-modal');
+            closeModal('complete-modal'); 
             openModal('success-modal');
             document.getElementById('btn-next-game').style.display = (myNum === 1) ? 'block' : 'none';
-            return;
+            return; // 這裡 return 很重要，因為成功了就代表不需要處理後續的「投票中」邏輯
+        }
+
+        // 2. 處理「投票中」 (CHECKING) 與其他階段
+        const completeModal = document.getElementById('complete-modal');
+        if (s.phase === 'CHECKING') {
+            completeModal.style.display = 'flex';
+            const th = s.maxPlayers === 1 ? 1 : Math.ceil((s.maxPlayers + 1) / 2);
+            document.getElementById('vote-status').innerText = `目前贊成：${s.completeVotes.length} / ${th}`;
+        } else {
+            // 包含 DRAFTING, SOLVING 階段，都確保投票窗是關閉的
+            completeModal.style.display = 'none';
         }
         
-        document.getElementById('complete-modal').style.display = (s.phase === 'CHECKING' ? 'flex' : 'none');
-
         // --- 狀態橫幅邏輯 ---
         const statusBanner = document.getElementById('status-txt');
         if (s.phase === 'DRAFTING') {
@@ -514,45 +526,39 @@
         renderBoard(s);
     }        
         function renderBoard(s) {
-        const b = document.getElementById('board'); 
-        b.innerHTML = '';
+    const b = document.getElementById('board'); 
+    b.innerHTML = '';
+    
+    s.board.forEach((c, i) => {
+        const d = document.createElement('div');
+        d.className = 'cell';
         
-        s.board.forEach((c, i) => {
-            const d = document.createElement('div');
-            d.className = 'cell';
-            
-            // 處理 6x6 的粗邊框線
-            if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
+        if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
 
-            // --- 核心邏輯修改開始 ---
-            if (c.val === 7) {
-                // 如果數值是 7，它是牆壁
-                d.classList.add('wall');
-                d.innerHTML = ''; // 確保文字清空，不顯示 7
+        if (c.val === 7) {
+            d.classList.add('wall');
+            d.onclick = null; // 🛡️ 防止牆壁被選取
+        } else {
+            if (c.isFixed) d.classList.add('fixed');
+            if (i === selectedIdx) d.classList.add('selected');
+
+            if (c.val) {
+                d.innerHTML = `<span style="color:${c.isFixed ? '#000' : 'var(--purple)'}">${c.val}</span>`;
             } else {
-                // 一般數字邏輯
-                if (c.isFixed) d.classList.add('fixed');
-                if (i === selectedIdx) d.classList.add('selected');
-
-                if (c.val) {
-                    d.innerHTML = `<span style="color:${c.isFixed ? '#000' : 'var(--purple)'}">${c.val}</span>`;
-                } else {
-                    d.innerHTML = '';
-                }
-
-                // 只有非牆壁且非固定的格子才能被點擊
-                d.onclick = () => { 
-                    if(!c.isFixed) { 
-                        selectedIdx = i; 
-                        renderBoard(s); 
-                    } 
-                };
+                d.innerHTML = '';
             }
-            // --- 核心邏輯修改結束 ---
 
-            b.appendChild(d);
-        });
-    }
+            // 只有非牆壁且非固定的格子才能被點擊
+            d.onclick = () => { 
+                if(!c.isFixed) { 
+                    selectedIdx = i; 
+                    renderBoard(s); 
+                } 
+            };
+        }
+        b.appendChild(d);
+    });
+}
 
     function fill(v) { if(selectedIdx !== null) socket.emit('fill', {roomId:myRoomId, index:selectedIdx, val:v}); }
 
