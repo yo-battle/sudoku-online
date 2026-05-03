@@ -302,12 +302,12 @@
         <div id="panel-create">
             <p style="color:#666; font-size:14px;">選擇人數</p>
             <div class="opt-group" id="p-opts">
-                <button class="opt-btn" onclick="setVal('p',1)">1 單身貴族</button>
-                <button class="opt-btn active" onclick="setVal('p',2)">2 雙排</button>
-                <button class="opt-btn" onclick="setVal('p',3)">3 個和尚沒水喝</button>
-                <button class="opt-btn" onclick="setVal('p',4)">4 不吉利</button>
-                <button class="opt-btn" onclick="setVal('p',5)">5 友誼破壞機</button>
-                <button class="opt-btn" onclick="setVal('p',6)">6 居然湊得到！？</button>
+                <button class="opt-btn" data-v="1" onclick="setVal('p',1)">1 單身貴族</button>
+                <button class="opt-btn active" data-v="2" onclick="setVal('p',2)">2 雙排</button>
+                <button class="opt-btn" data-v="3" onclick="setVal('p',3)">3 個和尚沒水喝</button>
+                <button class="opt-btn" data-v="4" onclick="setVal('p',4)">4 不吉利</button>
+                <button class="opt-btn" data-v="5" onclick="setVal('p',5)">5 友誼破壞機</button>
+                <button class="opt-btn" data-v="6" onclick="setVal('p',6)">6 居然湊得到！？</button>
             </div>
             <p style="color:#666; font-size:14px;">難度等級</p>
             <div class="opt-group" id="d-opts">
@@ -473,14 +473,19 @@
     // 1. 更新資料模型
     config[k] = v; 
     
-    // 2. 找到對應的容器，只更新該群組內的按鈕
+    // 2. 修正 ID 選擇器：你的 HTML 是 p-opts 和 d-opts
     const group = document.getElementById(`${k}-opts`);
     if (!group) return;
 
+    // 3. 遍歷該群組內所有按鈕
     group.querySelectorAll('.opt-btn').forEach(btn => {
-        // 檢查按鈕的 data-v 是否等於目前的數值 (注意型別轉換)
-        const isMatch = Number(btn.dataset.v) === v;
-        btn.classList.toggle('active', isMatch);
+        // 檢查按鈕上的 onclick 屬性是否包含該數值，或是直接比對我們補上的 data-v
+        const valOnBtn = btn.getAttribute('data-v');
+        if (valOnBtn == v) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
 }
 
