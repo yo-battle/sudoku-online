@@ -4,7 +4,6 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 // 1. 設定靜態檔案與路由
 app.use(express.static(__dirname));
@@ -24,39 +23,88 @@ function loadPuzzles() {
         const data = fs.readFileSync('./puzzles.json', 'utf8');
         return JSON.parse(data);
     } catch (err) {
+        // 預防萬一題庫讀取失敗的備援
         return { "1": [{ id: "ERR", data: "0".repeat(36), answer: "0".repeat(36) }] };
     }
+}
+
+// 驗證邏輯：核心在於排除 7 (牆壁) 後的重複性檢查
+function validateSudoku6x6(b) {
+    for (let i = 0; i < 6; i++) {
+        let rowArr = [], colArr = [], blockArr = [];
+
+        for (let j = 0; j < 6; j++) {
+            rowArr.push(b[i * 6 + j]);
+            colArr.push(b[j * 6 + i]);
+            // 6x6 數獨的宮格邏輯 (2x3 或 3x2 視你設計而定，此為常見的 2x3 橫向宮)
+            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
+            let bc = (i % 2) * 3 + (j % 3);
+            blockArr.push(b[br * 6 + bc]);
+        }
+
+        const isGroupValid = (arr) => {
+            const count7 = arr.filter(n => n == 7).length; 
+            const maxAllowed = 6; // 6x6 標準數字為 1~6
+            let seen = new Set();
+
+            for (let num of arr) {
+                if (num == 7 || num === null) continue; // 跳過牆壁與空格
+                const val = parseInt(num);
+                if (isNaN(val) || val < 1 || val > 6) return false;
+                if (seen.has(val)) return false; // 重複了！
+                seen.add(val);
+            } 
+            return true;
+        };
+
+        if (!isGroupValid(rowArr) || !isGroupValid(colArr) || !isGroupValid(blockArr)) return false;
+    }
+    return true;
 }
 
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
     
-    // 新增：處理房長開啟下一局的請求
+    // 斷線清理 (放在最上層，確保隨時監聽)
+    socket.on('disconnect', () => {
+        for (const rid in rooms) {
+            const r = rooms[rid];
+            if (r.players[socket.id]) {
+                const pNum = r.players[socket.id];
+                delete r.players[socket.id];
+                r.occupiedNums = r.occupiedNums.filter(x => x !== pNum);
+                
+                if (Object.keys(r.players).length === 0) {
+                    delete rooms[rid];
+                } else {
+                    io.to(rid).emit('sync', r);
+                }
+                break;
+            }
+        }
+    });
+
+    // 處理房長開啟下一局
     socket.on('backToDraft', (roomId) => {
         const room = rooms[roomId];
-        // 安全檢查：只有房長 (pNum === 1) 且房間存在時才能重啟
         if (room && room.players[socket.id] === 1) {
             const puzzles = loadPuzzles();
             const pList = puzzles[room.difficulty] || puzzles["1"];
             const puzzle = pList[Math.floor(Math.random() * pList.length)];
             
-            // 1. 更新盤面與答案
             room.puzzleId = puzzle.id;
             room.board = puzzle.data.split('').map(num => ({ 
                 val: num !== '0' ? parseInt(num) : null, 
                 isFixed: num !== '0' 
             }));
             room.answer = puzzle.answer;
-            
-            // 2. 重置房間狀態，但保留玩家
             room.phase = 'DRAFTING';
-            room.readyPlayers = [];    // 清空準備狀態
-            room.changeRequests = [];  // 清空換題投票
-            room.completeVotes = [];   // 清空完成投票
-            room.lastError = null;     // 清除錯誤訊息
-            room.turn = 1;             // 輪次歸零
+            room.readyPlayers = [];
+            room.changeRequests = [];
+            room.completeVotes = [];
+            room.lastError = null;
+            room.turn = 1;
             
-            // 3. 通知所有人同步
             io.to(roomId).emit('sync', room);
         }
     });
@@ -100,38 +148,29 @@ io.on('connection', (socket) => {
             room.puzzleId = puzzle.id;
             room.board = puzzle.data.split('').map(num => ({ val: num !== '0' ? parseInt(num) : null, isFixed: num !== '0' }));
             room.answer = puzzle.answer; 
-            room.lastError = null; 
-
             room.phase = 'DRAFTING';
             room.readyPlayers = []; room.changeRequests = []; room.completeVotes = []; room.turn = 1;
+            room.lastError = null;
             io.to(roomId).emit('sync', room);
         } else {
             io.to(roomId).emit('sync', room);
         }
     });
-// 填字邏輯 (已加上安全檢查)
+
+    // 填字邏輯
     socket.on('fill', (data) => {
         const { roomId, index, val } = data;
         const room = rooms[roomId];
-        
         if (!room || room.phase !== 'SOLVING') return;
         
-        if (index === null || index < 0 || !room.board[index]) {
-            console.error(`⚠️ 收到無效的索引: ${index}`);
-            return; 
-        }
+        if (index === null || index < 0 || !room.board[index]) return;
 
         if (room.turn === room.players[socket.id] && !room.board[index].isFixed) {
             room.board[index].val = val;
             room.lastError = null; 
 
-            // --- 重點修改區域：重新定義「填滿」的標準 ---
-            const isAllFilled = room.board.every(cell => {
-                // 如果是題目預設的 7，我們直接判定為「已填滿」
-                if (cell.isFixed && cell.val === 7) return true;
-                // 其餘格子必須要有值（不是 null）
-                return cell.val !== null;
-            });
+            // 檢查全盤是否填滿
+            const isAllFilled = room.board.every(cell => cell.val !== null);
 
             if (isAllFilled) { 
                 room.phase = 'CHECKING'; 
@@ -139,57 +178,40 @@ io.on('connection', (socket) => {
             } else { 
                 room.turn = (room.turn % room.maxPlayers) + 1; 
             }
-            // ------------------------------------------
-
             io.to(roomId).emit('sync', room);
         }
     });  
   
-    // 完成投票邏輯
+    // 投票完成
     socket.on('voteComplete', (data) => {
         const { roomId, agree } = data;
-        const room = rooms[roomId]; // 1. 先抓出房間
-        
-        // 2. 基礎安全檢查
+        const room = rooms[roomId];
         if (!room || room.phase !== 'CHECKING') return;
-
-        // 3. 確保玩家在房間內
         const pNum = room.players[socket.id];
         if (!pNum) return; 
 
         if (agree) {
-            // 4. 防止重複投票
-            if (!room.completeVotes.includes(pNum)) {
-                room.completeVotes.push(pNum);
-            }
-            
+            if (!room.completeVotes.includes(pNum)) room.completeVotes.push(pNum);
             const th = room.maxPlayers === 1 ? 1 : Math.ceil((room.maxPlayers + 1) / 2);
 
             if (room.completeVotes.length >= th) {
-                // 取得純數字陣列進行驗證
                 const boardValues = room.board.map(cell => cell.val);
-
-                // 5. 呼叫外部的驗證函式
                 if (validateSudoku6x6(boardValues)) {
                     room.phase = 'RESULT';
-                    room.lastError = null;
                 } else {
                     room.phase = 'SOLVING';
-                    room.completeVotes = []; 
-                    room.lastError = "答案有誤（行列或宮格重複），請再檢查！";
+                    room.lastError = "答案有誤，請再檢查！";
+                    room.completeVotes = [];
                 }
             }
         } else { 
-            // 有人點「否」，退回解題狀態
             room.phase = 'SOLVING'; 
             room.completeVotes = []; 
-            room.lastError = null;
         }
-        
         io.to(roomId).emit('sync', room);
     });
 
-    // 基礎房間操作
+    // 基礎房間操作 (checkRoom, selectPos, ready, leaveRoom, destroyRoom 等同你之前的邏輯)
     socket.on('checkRoom', (rid) => { 
         if(rooms[rid]) socket.emit('roomStatus', { occupiedNums: rooms[rid].occupiedNums, maxPlayers: rooms[rid].maxPlayers }); 
     });
@@ -211,87 +233,24 @@ io.on('connection', (socket) => {
     });
 
     socket.on('leaveRoom', (rid) => {
-        const r = rooms[rid]; 
-        if(!r) return;
-        
+        const r = rooms[rid]; if(!r) return;
         const n = r.players[socket.id]; 
         delete r.players[socket.id];
         r.occupiedNums = r.occupiedNums.filter(x => x !== n);
-        
-        socket.leave(rid); 
-        socket.emit('left'); 
-        
-        if(Object.keys(r.players).length > 0) {
-            io.to(rid).emit('sync', r); 
-        } else {
-            delete rooms[rid]; 
-        }
+        socket.leave(rid); socket.emit('left'); 
+        if(Object.keys(r.players).length > 0) io.to(rid).emit('sync', r); 
+        else delete rooms[rid];
     });
 
     socket.on('destroyRoom', (rid) => { 
         if(rooms[rid] && rooms[rid].players[socket.id] === 1) { 
-            io.to(rid).emit('roomDestroyed'); 
-            delete rooms[rid]; 
+            io.to(rid).emit('roomDestroyed'); delete rooms[rid]; 
         } 
     });
-
-    socket.on('reportIssue', (data) => {
-        const { roomId, puzzleId, board, reason } = data;
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `report_${puzzleId}_${timestamp}.txt`;
-        const content = `時間: ${new Date().toLocaleString()}\n原因: ${reason}\n房間: ${roomId}\n盤面: ${JSON.stringify(board)}\n`;
-        fs.writeFile(path.join(ERROR_DIR, fileName), content, (err) => {});
-    });
 });
-
-// 在 io.on 外部定義檢查邏輯
-// --- 修正後的完整驗證邏輯 ---
-
-function validateSudoku6x6(b) {
-    for (let i = 0; i < 6; i++) {
-        let rowArr = [], colArr = [], blockArr = [];
-
-        for (let j = 0; j < 6; j++) {
-            // 1. 抓取資料
-            rowArr.push(b[i * 6 + j]);
-            colArr.push(b[j * 6 + i]);
-            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
-            let bc = (i % 2) * 3 + (j % 3);
-            blockArr.push(b[br * 6 + bc]);
-        }
-
-        // 2. 定義內部的檢查函數（閉包）
-        const isGroupValid = (arr) => {
-            const count7 = arr.filter(n => n == 7).length; 
-            const maxAllowed = 6 - count7;
-            let seen = new Set();
-
-            for (let num of arr) {
-                if (num == 7) continue; // 鬼牌跳過
-                
-                const val = parseInt(num);
-                // 檢查範圍與是否重複
-                if (isNaN(val) || val < 1 || val > maxAllowed) return false;
-                if (seen.has(val)) return false;
-                seen.add(val);
-            } 
-            // 必須剛好填滿該組剩下的白格數量
-            return seen.size === maxAllowed;
-        };
-
-        // 3. 執行三向檢查
-        if (!isGroupValid(rowArr)) return false;
-        if (!isGroupValid(colArr)) return false;
-        if (!isGroupValid(blockArr)) return false;
-    }
-    return true;
-}
 
 // 伺服器啟動
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log('\x1b[36m%s\x1b[0m', '==============================================');
-    console.log('\x1b[32m%s\x1b[0m', '    🚀 數獨連線遊戲伺服器已成功啟動！');
-    console.log(`    🏠 地址: http://localhost:${PORT}`);
-    console.log('\x1b[36m%s\x1b[0m', '==============================================');
+    console.log('🚀 Sudoku Server Running on Port ' + PORT);
 });
