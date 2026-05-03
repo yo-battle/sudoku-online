@@ -305,17 +305,7 @@
         </div>
     </div>
 
-    <div class="side-panel">
-    <div id="action-area" style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="ready-btn" class="btn-main" style="background:var(--green); box-shadow:0 4px 0 #27ae60; margin:0;" onclick="socket.emit('ready', myRoomId)">準備好了 👍</button>
-        <button id="change-btn" class="btn-main" style="background:var(--gray); font-size:14px; box-shadow:0 4px 0 #7f8c8d; margin:0;" onclick="socket.emit('requestChangePuzzle', myRoomId)">換題投票 (<span id="change-count">0/0</span>)</button>
-    </div>
-
-    <div id="info-area" style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 id="rid-txt" style="margin:0;">房號：----</h3>
-        <span id="pnum-txt" style="background:#eee; padding:2px 8px; border-radius:5px; font-size:12px;">--號</span>
-    </div>
-
+<div class="side-panel">
     <div id="status-txt" class="status-banner">等待玩家...</div>
 
     <div id="control-area" style="display:none;">
@@ -329,8 +319,17 @@
         </div>
     </div>
 
+    <div id="action-area" style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="ready-btn" class="btn-main" style="background:var(--green); box-shadow:0 4px 0 #27ae60; margin:0;" onclick="socket.emit('ready', myRoomId)">準備好了 👍</button>
+        <button id="change-btn" class="btn-main" style="background:var(--gray); font-size:14px; box-shadow:0 4px 0 #7f8c8d; margin:0;" onclick="socket.emit('requestChangePuzzle', myRoomId)">換題投票 (<span id="change-count">0/0</span>)</button>
+    </div>
+
+    <div id="info-area" style="display:flex; justify-content:space-between; align-items:center; margin-top: 5px;">
+        <h3 id="rid-txt" style="margin:0; font-size: 16px;">房號：----</h3>
+        <span id="pnum-txt" style="background:#eee; padding:2px 8px; border-radius:5px; font-size:12px;">--號</span>
+    </div>
+
     <div class="member-area">
-        <div style="font-size:11px; color:#999; margin-bottom:5px;">當前玩家</div>
         <div id="member-list-content"></div>
     </div>
     
