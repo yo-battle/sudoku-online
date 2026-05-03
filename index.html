@@ -122,6 +122,9 @@
         }
         .h-line { border-bottom: 3px solid #000 !important; }
         .cell.fixed { background: #f0f0f0; font-weight: bold; }
+        .cell.highlight {
+            background-color: #f8f1ff; /* 淡淡的紫色，對應你的主題色 */
+        }
         /* --- 新增：隱形鬼牌樣式 --- */
 
         /* 確保非鬼牌的白格在特殊題型中依然清楚 */
@@ -160,18 +163,18 @@
         .member-area { background: rgba(255,255,255,0.7); padding: 12px; border-radius: 12px; border: 1px dashed #ccc; }
         .member-badge { display: inline-block; padding: 5px 12px; background: white; border-radius: 20px; margin: 4px; border: 1px solid #eee; font-size: 13px; }
 
-.modal-overlay { 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 100vw; /* 改成視窗寬度 */
-    height: 100vh; /* 改成視窗高度 */
-    background: rgba(0,0,0,0.7); 
-    display: none; 
-    justify-content: center; 
-    align-items: center; 
-    z-index: 9999 !important; /* 最高的權威 */
-}        
+        .modal-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100vw; /* 改成視窗寬度 */
+            height: 100vh; /* 改成視窗高度 */
+            background: rgba(0,0,0,0.7); 
+            display: none; 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 9999 !important; /* 最高的權威 */
+        }        
         .modal-box { background: white; padding: 30px; border-radius: 24px; text-align: center; width: 320px; }
         .report-opt { display: block; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #eee; border-radius: 12px; cursor: pointer; font-weight: bold; }
         .btn-exit-trigger { background: none; border: none; color: var(--gray); text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 15px; }
@@ -199,13 +202,57 @@
     .keypad { margin: 5px 0 10px 0; gap: 8px; }
     .n-btn { padding: 10px 0 !important; font-size: 22px; height: auto !important; }
 }
-    /* 讓「異世界」按鈕選中時有一種虛擬空間的魔法感 */
-#d-opts .opt-btn:nth-child(3).active {
-    border: 2px dashed #8C00FF !important; /* 強制使用紫色虛線 */
-    background-color: rgba(140, 0, 255, 0.1) !important; /* 淡淡的紫色底 */
-    color: #8C00FF !important;
-    animation: portal-pulse 1.5s infinite; /* 呼叫下方的動畫 */
-}
+    /* ⚠️ 跑馬燈樣式：黃底黑字 */
+        #announcement-bar {
+            display: none; /* 預設隱藏，由 JS 控制顯示 */
+            background: #fffa65; 
+            color: #000;
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 8px 0;
+            font-weight: bold;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 9999;
+            border-bottom: 1px solid #ccc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        #notice-text {
+            display: inline-block;
+            padding-left: 100%;
+            animation: marquee 15s linear infinite;
+        }
+
+        /* --- 跑馬燈動畫：控制文字從右往左滾動 --- */
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* --- 當公告觸發時，透過 JS 給 body 加上這個 class --- */
+        /* 使用 !important 是為了蓋過你原本 body { padding: 20px } 的設定 */
+        body.has-announcement {
+            padding-top: 45px !important; 
+            transition: padding-top 0.3s ease; /* 增加一個滑順的推擠感 */
+        }
+
+        /* 手機版稍微縮減推擠高度，避免佔用太多操作空間 */
+        @media (max-width: 800px) {
+            body.has-announcement {
+                padding-top: 38px !important;
+            }
+        }
+
+        /* 讓「異世界」按鈕選中時有一種虛擬空間的魔法感 */
+        #d-opts .opt-btn.btn-otherworld.active {
+            border: 2px dashed #8C00FF !important; 
+            background-color: rgba(140, 0, 255, 0.1) !important; 
+            color: #8C00FF !important;
+            animation: portal-pulse 1.5s infinite; 
+        }
 
 /* 定義閃爍動畫：產生一種傳送門的發光效果 */
 @keyframes portal-pulse {
@@ -224,16 +271,26 @@
 }
     </style>
 </head>
-<body>
-<div id="guide-modal" class="modal-overlay">
-    <div class="modal-box" style="width: 85%; max-width: 400px;">
-        <h3>🎮新手教學</h3>
-        <p style="text-align:left; font-size:16px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
-        <p style="text-align:left; font-size:16px; color:#666;"><b>本遊戲需合作答題</b>。如果你的隊友掛機，請肘擊他。</p>
 
-        <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
+<body>
+
+    <div id="announcement-bar" style="display:none; background: #fffa65; color: #000; overflow: hidden; white-space: nowrap; padding: 8px 0; font-weight: bold; position: fixed; top: 0; left: 0; width: 100%; z-index: 10000; border-bottom: 2px solid #dabf00; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div id="notice-text" style="display: inline-block; padding-left: 100%; animation: marquee 15s linear infinite;">
+            </div>
     </div>
-</div>
+
+    <div id="guide-modal" class="modal-overlay">
+        <div class="modal-box" style="width: 85%; max-width: 400px;">
+            <h3>🎮新手教學</h3>
+            <p style="text-align:left; font-size:16px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
+            <p style="text-align:left; font-size:16px; color:#666;"><b>本遊戲需合作答題</b>。如果你的隊友掛機，請肘擊他。</p>
+            <hr style="border: 0.5px solid #eee; margin: 15px 0;">
+            <p id="online-info" style="color: #7d5fff; font-weight: bold; font-size: 14px;">
+                🌐 當前有 <span id="online-num">--</span> 位玩家正在互相傷害
+            </p>
+            <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
+        </div>
+    </div>
 
 <div class="lobby-container" id="lobby-root">
     <div id="lobby" class="lobby-box">
@@ -254,10 +311,11 @@
             </div>
             <p style="color:#666; font-size:14px;">難度等級</p>
             <div class="opt-group" id="d-opts">
-                <button class="opt-btn active" onclick="setVal('d',1)">1 簡單</button>
-                <button class="opt-btn" onclick="setVal('d',2)">2 自信✨</button>
-                <button class="opt-btn" style="border:1.5px dashed var(--purple); color:var(--purple);" onclick="setVal('d',3)">3 異世界🧙‍♂️</button>
+                <button class="opt-btn" data-v="1" onclick="setVal('d',1)">1 簡單</button>
+                <button class="opt-btn" data-v="2" onclick="setVal('d',2)">2 自信✨</button>
+                <button class="opt-btn btn-otherworld" data-v="3" onclick="setVal('d',3)">3 異世界🧙‍♂️</button>
             </div>
+
             <button class="btn-main" onclick="socket.emit('createRoom', config)">開始創建</button>
         </div>
 
@@ -294,7 +352,7 @@
             • 若有改進建議，請透過<u>回報問題</u>聯繫我們。<br>
             • 異世界題庫需要測試！<br>
             • 夭壽的是作者不知道幾人在線。如有卡頓，請耐心等待喔～<br>
-            <span style="font-size: 15px; color: #999;">v1.2.3 最近更新：115/5/3 新增「異世界」題庫</span>
+            <span style="font-size: 15px; color: #999;">v1.3 最近更新：115/5/3 新增「異世界」題庫</span>
             
             <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee;">
                 <img src="sudokuQRcode.png" style="width: 100px; height: 100px; border-radius: 4px; background: white;" alt="QR">
@@ -412,12 +470,19 @@
     }
 
     function setVal(k, v) { 
-        config[k] = v; 
-        document.querySelectorAll(`#${k}-opts .opt-btn`).forEach(b => {
-            const isMatch = b.getAttribute('onclick').includes(v);
-            b.classList.toggle('active', isMatch);
-        });
-    }
+    // 1. 更新資料模型
+    config[k] = v; 
+    
+    // 2. 找到對應的容器，只更新該群組內的按鈕
+    const group = document.getElementById(`${k}-opts`);
+    if (!group) return;
+
+    group.querySelectorAll('.opt-btn').forEach(btn => {
+        // 檢查按鈕的 data-v 是否等於目前的數值 (注意型別轉換)
+        const isMatch = Number(btn.dataset.v) === v;
+        btn.classList.toggle('active', isMatch);
+    });
+}
 
     function pressLobby(key) {
         if(key === 'back') lobbyRid = lobbyRid.slice(0, -1);
@@ -571,6 +636,13 @@
         }
     });
 
+    socket.on('updateOnlineCount', (count) => {
+    const numEl = document.getElementById('online-num');
+    if (numEl) {
+        numEl.innerText = count;
+        }
+    });
+
     socket.on('joined', d => {
         myRoomId = d.roomId; myNum = d.pNum;
         document.getElementById('lobby-root').style.display = 'none';
@@ -589,6 +661,24 @@
         switchTab('create');
         closeModal('success-modal');
     }
+
+    // 監聽公告廣播 (黃條跑馬燈)
+    socket.on('updateNotice', (msg) => {
+        const bar = document.getElementById('announcement-bar');
+        const text = document.getElementById('notice-text');
+        
+        if (msg && msg.trim() !== "") {
+            // 有內容：顯示黃條，並讓 body 增加上方間距防止擋到標題
+            if (text) text.innerText = "📢 臨時廣播：" + msg;
+            if (bar) bar.style.display = 'block';
+            document.body.classList.add('has-announcement');
+        } else {
+            // 沒內容：隱藏黃條，恢復 body 間距
+            if (bar) bar.style.display = 'none';
+            document.body.classList.remove('has-announcement');
+        }
+    });
+
 </script>
 </body>
 </html>

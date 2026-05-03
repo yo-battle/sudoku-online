@@ -13,6 +13,7 @@ app.get('/', (req, res) => {
 
 let rooms = {};
 let roomCounters = {}; 
+let currentNotice = "歡迎來到連線數獨！請點擊『快速加入』開始遊戲。"; // 新增這一行
 
 const ERROR_DIR = './error';
 if (!fs.existsSync(ERROR_DIR)) fs.mkdirSync(ERROR_DIR);
@@ -30,41 +31,65 @@ function loadPuzzles() {
 
 // 驗證邏輯：核心在於排除 7 (牆壁) 後的重複性檢查
 function validateSudoku6x6(b) {
-    for (let i = 0; i < 6; i++) {
-        let rowArr = [], colArr = [], blockArr = [];
-
-        for (let j = 0; j < 6; j++) {
-            rowArr.push(b[i * 6 + j]);
-            colArr.push(b[j * 6 + i]);
-            // 6x6 數獨的宮格邏輯 (2x3 或 3x2 視你設計而定，此為常見的 2x3 橫向宮)
-            let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
-            let bc = (i % 2) * 3 + (j % 3);
-            blockArr.push(b[br * 6 + bc]);
+    const isGroupValid = (arr) => {
+        let seen = new Set();
+        for (let num of arr) {
+            if (num == 7 || num === null) continue; // 跳過牆壁與空格
+            const val = parseInt(num);
+            if (isNaN(val) || val < 1 || val > 6) return false;
+            if (seen.has(val)) return false; // 發現重複數字
+            seen.add(val);
         }
+        return true;
+    };
 
-        const isGroupValid = (arr) => {
-            const count7 = arr.filter(n => n == 7).length; 
-            const maxAllowed = 6; // 6x6 標準數字為 1~6
-            let seen = new Set();
-
-            for (let num of arr) {
-                if (num == 7 || num === null) continue; // 跳過牆壁與空格
-                const val = parseInt(num);
-                if (isNaN(val) || val < 1 || val > 6) return false;
-                if (seen.has(val)) return false; // 重複了！
-                seen.add(val);
-            } 
-            return true;
-        };
-
-        if (!isGroupValid(rowArr) || !isGroupValid(colArr) || !isGroupValid(blockArr)) return false;
+    // 1. 檢查所有「橫列」 (Rows)
+    for (let r = 0; r < 6; r++) {
+        let rowArr = b.slice(r * 6, r * 6 + 6);
+        if (!isGroupValid(rowArr)) return false;
     }
+
+    // 2. 檢查所有「直行」 (Cols)
+    for (let c = 0; c < 6; c++) {
+        let colArr = [];
+        for (let r = 0; r < 6; r++) {
+            colArr.push(b[r * 6 + c]);
+        }
+        if (!isGroupValid(colArr)) return false;
+    }
+
+    // 3. 檢查所有「宮格」 (Blocks - 2x3 結構)
+    // 6x6 數獨通常分為 6 個 2x3 的小矩形
+    for (let r = 0; r < 6; r += 2) {      // 垂直跳 2 格
+        for (let c = 0; c < 6; c += 3) {  // 水平跳 3 格
+            let blockArr = [];
+            for (let i = 0; i < 2; i++) {     // 內部高度 2
+                for (let j = 0; j < 3; j++) { // 內部寬度 3
+                    blockArr.push(b[(r + i) * 6 + (c + j)]);
+                }
+            }
+            if (!isGroupValid(blockArr)) return false;
+        }
+    }
+
     return true;
 }
 
 // Socket.io 遊戲邏輯
 io.on('connection', (socket) => {
-    
+    io.emit('updateOnlineCount', io.engine.clientsCount);
+    socket.emit('updateNotice', currentNotice);
+
+    // 2. 管理員修改公告指令
+    socket.on('adminSetNotice', (data) => {
+        const ADMIN_KEY = "yobattlesudoku"; // 這裡改一個你記得住的詞
+        if (data && data.key === ADMIN_KEY) {
+            currentNotice = data.msg;
+            io.emit('updateNotice', currentNotice); 
+            console.log(`[公告更新] ${data.msg}`);
+        }
+    });
+
     // 斷線清理 (放在最上層，確保隨時監聽)
     socket.on('disconnect', () => {
         for (const rid in rooms) {
@@ -79,9 +104,13 @@ io.on('connection', (socket) => {
                 } else {
                     io.to(rid).emit('sync', r);
                 }
-                break;
+                break; // 跳出房間搜尋迴圈
             }
         }
+        // --- 補在這裡 ---
+        // 不論他有沒有在房間內，只要斷開連線，就對全服廣播最新人數
+        io.emit('updateOnlineCount', io.engine.clientsCount);
+        // ----------------
     });
 
     // 處理房長開啟下一局
@@ -253,6 +282,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 在伺服器端 socket.on 區塊內新增
+    socket.on('quickJoin', () => {
+        // 尋找符合條件的房間：
+        // 1. 狀態是 DRAFTING (還沒開始)
+        // 2. 目前人數 < 最大人數
+        const targetRoomId = Object.keys(rooms).find(rid => {
+            const r = rooms[rid];
+            return r.phase === 'DRAFTING' && r.occupiedNums.length < r.maxPlayers;
+        });
+
+        if (targetRoomId) {
+            // 找到了，告訴前端準備加入這個房間
+            socket.emit('quickJoinResult', { success: true, roomId: targetRoomId });
+        } else {
+            // 沒找到，告訴前端目前沒空位
+            socket.emit('quickJoinResult', { success: false, msg: '目前沒有排隊中的空房間，自己開一間吧！' });
+        }
+    });
+
     socket.on('ready', (rid) => {
         const r = rooms[rid]; if(!r) return;
         const n = r.players[socket.id]; if(!r.readyPlayers.includes(n)) r.readyPlayers.push(n);
@@ -280,5 +328,24 @@ io.on('connection', (socket) => {
 // 伺服器啟動
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
+    process.stdin.on('data', (data) => {
+    const input = data.toString().trim();
+    if (input === 'clear') {
+        currentNotice = "";
+        io.emit('updateNotice', "");
+        console.log(" [系統] 已清除全服公告");
+    } else if (input !== "") {
+        currentNotice = input;
+        io.emit('updateNotice', currentNotice);
+        console.log(` [系統] 發送公告：${currentNotice}`);
+    }
+});
     console.log('🚀 Sudoku Server Running on Port ' + PORT);
 });
+
+// 在檔案最末端新增定期報數監控
+setInterval(() => {
+    const totalRooms = Object.keys(rooms).length;
+    // 這個 log 會顯示在 Render 的 Dashboard -> Logs 裡面
+    console.log(`📊 [系統狀態] 在線人數: ${io.engine.clientsCount} | 進行中房間: ${totalRooms}`);
+}, 60000);
