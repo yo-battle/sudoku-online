@@ -241,28 +241,52 @@ io.on('connection', (socket) => {
 // 在 io.on 外部定義檢查邏輯
 function validateSudoku6x6(b) {
     for (let i = 0; i < 6; i++) {
-        let row = new Set();
-        let col = new Set();
-        let block = new Set();
+        // 1. 抓取這三組資料：橫行、直列、宮格
+        let rowArr = [];
+        let colArr = [];
+        let blockArr = [];
 
         for (let j = 0; j < 6; j++) {
-            // 橫行檢查 (Row)
-            let rVal = b[i * 6 + j];
-            if (row.has(rVal)) return false;
-            row.add(rVal);
-
-            // 直列檢查 (Column)
-            let cVal = b[j * 6 + i];
-            if (col.has(cVal)) return false;
-            col.add(cVal);
-
-            // 2x3 宮格檢查 (Block)
+            // 橫行
+            rowArr.push(b[i * 6 + j]);
+            // 直列
+            colArr.push(b[j * 6 + i]);
+            // 2x3 宮格
             let br = Math.floor(i / 2) * 2 + Math.floor(j / 3);
             let bc = (i % 2) * 3 + (j % 3);
-            let bVal = b[br * 6 + bc];
-            if (block.has(bVal)) return false;
-            block.add(bVal);
+            blockArr.push(b[br * 6 + bc]);
         }
+
+        // 2. 定義內部的檢查函數
+        const isGroupValid = (arr) => {
+            // 數一下題目裡有多少個 7 (鬼牌/遮罩)
+            const count7 = arr.filter(n => n === 7).length; 
+            // 動態計算最大允許值：6格扣掉n個7，剩下的空格只能填 1 ~ (6-n)
+            const maxAllowed = 6 - count7; 
+
+            let seen = new Set();
+            for (let num of arr) {
+                if (num === 7) continue; // 題目自帶的 7 不參與 1-6 的檢查
+                
+                // 玩家只能填 1~6，且不能超過該組的動態上限 (maxAllowed)
+                // 舉例：若有 4 個 7，maxAllowed = 2，則此組出現 3 就是錯誤
+                if (num < 1 || num > maxAllowed) return false;
+                
+                // 檢查是否重複 (1-6 之間不可重複)
+                if (seen.has(num)) return false;
+                seen.add(num);
+            }
+            // 檢查該組是否填滿了所有應有的數字 (1 到 maxAllowed)
+            // 這是為了確保玩家沒有漏掉數字或是填了無效組合
+            if (seen.size !== maxAllowed) return false;
+
+            return true;
+        };
+
+        // 3. 執行三向檢查
+        if (!isGroupValid(rowArr)) return false;
+        if (!isGroupValid(colArr)) return false;
+        if (!isGroupValid(blockArr)) return false;
     }
     return true;
 }

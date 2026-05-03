@@ -122,6 +122,20 @@
         }
         .h-line { border-bottom: 3px solid #000 !important; }
         .cell.fixed { background: #f0f0f0; font-weight: bold; }
+        /* --- 新增：隱形鬼牌樣式 --- */
+        .cell.ghost {
+            background-color: #f0f0f0 !important; /* 強制背景與普通固定格一致 */
+            color: transparent !important;        /* 讓數字 7 隱形 */
+            cursor: default;                      /* 滑鼠游標不變 */
+            pointer-events: none;                 /* 關鍵：讓點擊穿透，玩家點不到這格 */
+            border: 0.5px solid #e0e0e0;          /* 稍微淡化邊框，讓圖形主體更明顯 */
+        }
+
+        /* 確保非鬼牌的白格在特殊題型中依然清楚 */
+        .cell:not(.fixed):not(.ghost) {
+            background-color: white;
+        }
+
         .cell.selected { background: #e3f2fd; outline: 2px solid var(--blue); z-index: 5; }
 
         .side-panel { width: 340px; display: flex; flex-direction: column; gap: 15px; }
@@ -232,7 +246,7 @@
             • 若有任何改進建議，請透過<u>回報問題</u>聯繫我們。<br>
             • 目前題庫共有 51 題可挑戰！<br>
             敬請期待後續更新😎
-            <span style="font-size: 15px; color: #999;">v1.0 最近更新：115年5月3日</span>
+            <span style="font-size: 15px; color: #999;">v1.1 最近更新：115年5月3日 新增特殊圖形數獨</span>
             
             <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee;">
                 <img src="sudokuQRcode.png" style="width: 100px; height: 100px; border-radius: 4px; background: white;" alt="QR">
@@ -421,16 +435,44 @@
     }
 
     function renderBoard(s) {
-        const b = document.getElementById('board'); b.innerHTML = '';
-        s.board.forEach((c, i) => {
-            const d = document.createElement('div');
-            d.className = 'cell' + (c.isFixed ? ' fixed' : '') + (i === selectedIdx ? ' selected' : '');
-            if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
-            if(c.val) d.innerHTML = `<span style="color:${c.isFixed?'#000':'var(--purple)'}">${c.val}</span>`;
-            d.onclick = () => { if(!c.isFixed) { selectedIdx = i; renderBoard(s); } };
-            b.appendChild(d);
-        });
-    }
+    const b = document.getElementById('board'); 
+    b.innerHTML = '';
+    
+    s.board.forEach((c, i) => {
+        const d = document.createElement('div');
+        
+        // 1. 判定是否為遮罩鬼牌 (如果是固定格且數值為 7)
+        const isGhost = (c.isFixed && c.val === 7);
+        
+        // 2. 組合 ClassName
+        d.className = 'cell';
+        if (c.isFixed) d.classList.add('fixed');
+        if (isGhost) d.classList.add('ghost'); // 套用剛才寫的 CSS
+        if (i === selectedIdx) d.classList.add('selected');
+        
+        // 3. 處理加粗邊框 (6x6 數獨的中間線)
+        if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) d.classList.add('h-line');
+        
+        // 4. 顯示文字內容
+        if (c.val && !isGhost) {
+            // 正常的數字顯示
+            d.innerHTML = `<span style="color:${c.isFixed ? '#000' : 'var(--purple)'}">${c.val}</span>`;
+        } else {
+            // 如果是 7 或空位，不顯示任何文字
+            d.innerHTML = '';
+        }
+        
+        // 5. 點擊事件：只有「非固定格」才可以點選
+        d.onclick = () => { 
+            if(!c.isFixed) { 
+                selectedIdx = i; 
+                renderBoard(s); 
+            } 
+        };
+        
+        b.appendChild(d);
+    });
+}
 
     function fill(v) { if(selectedIdx !== null) socket.emit('fill', {roomId:myRoomId, index:selectedIdx, val:v}); }
 

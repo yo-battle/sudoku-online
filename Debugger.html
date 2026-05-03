@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>數獨維運工具 - 專業高效版</title>
+    <title>數獨維運工具 - 鬼牌支援版</title>
     <style>
         :root {
             --purple: #8e44ad;
             --blue: #3498db;
-            --green: #27ae60; /* 新增綠色用於數列功能 */
+            --green: #27ae60;
             --dark: #2c3e50;
             --bg: #f0f2f5;
             --cell-size: 13vh; 
@@ -34,7 +34,7 @@
             gap: 20px;
         }
         
-        /* --- 左側：純淨盤面區 --- */
+        /* --- 左側盤面區 --- */
         .left-section { 
             display: flex; 
             flex-direction: column; 
@@ -58,7 +58,14 @@
             font-weight: bold;
             outline: none;
             box-sizing: border-box;
+            transition: all 0.2s;
         }
+        /* 新增：鬼牌隱身樣式 */
+        .cell.ghost {
+            background-color: #f0f0f0 !important;
+            color: transparent !important;
+        }
+        
         .v-line { border-right: 4px solid var(--dark) !important; }
         .h-line { border-bottom: 4px solid var(--dark) !important; }
 
@@ -68,21 +75,19 @@
             border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
         }
 
-        /* --- 右側：數據操作區 --- */
+        /* --- 右側數據區 --- */
         .right-section {
             flex: 1;
             display: flex;
             flex-direction: row; 
             gap: 15px;
         }
-
         .data-content {
             flex: 1;
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
-
         .panel-block {
             flex: 1;
             display: flex;
@@ -91,66 +96,36 @@
         h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--dark); border-left: 5px solid var(--purple); padding-left: 10px; }
 
         textarea {
-            flex: 1;
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-family: monospace;
-            font-size: 13px;
-            background: #fdfdfd;
-            resize: none;
+            flex: 1; width: 100%; padding: 12px;
+            border: 1px solid #ddd; border-radius: 8px;
+            box-sizing: border-box; font-family: monospace; font-size: 13px;
+            background: #fdfdfd; resize: none;
         }
 
         .result-box {
-            background: #fff0f5;
-            padding: 15px;
-            border-radius: 8px;
-            border: 2px dashed #f06292;
-            text-align: center;
+            background: #fff0f5; padding: 15px; border-radius: 8px;
+            border: 2px dashed #f06292; text-align: center;
         }
         .result-code {
-            display: block;
-            word-break: break-all;
-            background: white;
-            padding: 10px;
-            margin-top: 5px;
-            font-size: 1.2rem;
-            color: #d63384;
-            cursor: pointer;
-            border: 1px solid #ffc1e3;
-            border-radius: 5px;
-            letter-spacing: 1px;
+            display: block; word-break: break-all; background: white;
+            padding: 10px; margin-top: 5px; font-size: 1.2rem;
+            color: #d63384; cursor: pointer; border: 1px solid #ffc1e3;
+            border-radius: 5px; letter-spacing: 1px;
         }
 
-        /* --- 最右側：直式按鈕區 --- */
         .action-sidebar {
-            width: 100px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            width: 100px; display: flex; flex-direction: column; gap: 10px;
         }
         .side-btn {
-            flex: 1;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 5px;
-            font-size: 1rem;
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            transition: opacity 0.2s;
+            flex: 1; border: none; border-radius: 8px; color: white;
+            font-weight: bold; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; text-align: center;
+            padding: 5px; font-size: 1rem; writing-mode: vertical-rl;
+            text-orientation: mixed; transition: opacity 0.2s;
         }
         .side-btn:hover { opacity: 0.8; }
         .btn-import-json { background: var(--blue); }
-        .btn-import-raw { background: var(--green); } /* 新按鈕顏色 */
+        .btn-import-raw { background: var(--green); }
         .btn-export { background: var(--purple); }
 
         .tip { font-size: 0.75rem; color: #7f8c8d; margin-top: 3px; }
@@ -165,14 +140,14 @@
             <div class="btn-clear-area">
                 <button class="btn-clear" onclick="clearGrid()">清空盤面</button>
             </div>
-            <div class="tip">直接輸入 1-6。空格為 0。</div>
+            <div class="tip">輸入 1-6。輸入 <b>7</b> 代表鬼牌背景。</div>
         </div>
 
         <div class="right-section">
             <div class="data-content">
                 <div class="panel-block" style="flex: 0.5;">
                     <h3 style="border-left-color: var(--green);">⚡ 數列快讀 (貼上 36 位數字)</h3>
-                    <textarea id="rawStringInput" placeholder="例如：050206246003124065560421400632602010..."></textarea>
+                    <textarea id="rawStringInput" placeholder="例如：777177771777..."></textarea>
                 </div>
                 
                 <div class="panel-block">
@@ -206,8 +181,11 @@
             input.className = 'cell';
             input.maxLength = 1;
             input.id = 'c' + i;
+            
+            // 修改點 1：允許輸入 7，並動態切換鬼牌樣式
             input.oninput = function() { 
-                this.value = this.value.replace(/[^1-6]/g, ''); 
+                this.value = this.value.replace(/[^1-7]/g, ''); 
+                updateCellStyle(this);
                 exportString(); 
             };
             
@@ -217,21 +195,30 @@
             grid.appendChild(input);
         }
 
+        // 新增：根據數值更新格子樣式
+        function updateCellStyle(cell) {
+            if (cell.value === "7") {
+                cell.classList.add('ghost');
+            } else {
+                cell.classList.remove('ghost');
+            }
+        }
+
         function clearGrid() {
             if(!confirm("確定清空盤面？")) return;
             for(let i=0; i<36; i++) {
                 const c = document.getElementById('c'+i);
                 c.value = '';
+                c.classList.remove('ghost');
                 c.style.backgroundColor = 'white';
                 c.style.color = 'black';
             }
             exportString();
         }
 
-        // 新增功能：導入 36 位純數字數列
         function importRawString() {
             const raw = document.getElementById('rawStringInput').value.trim();
-            const cleanData = raw.replace(/[^0-9]/g, ''); // 過濾掉可能的空格或符號
+            const cleanData = raw.replace(/[^0-9]/g, ''); 
             
             if (cleanData.length !== 36) {
                 alert(`長度錯誤！目前長度為 ${cleanData.length}，必須為 36 位。`);
@@ -242,8 +229,13 @@
                 const val = cleanData[i];
                 const cell = document.getElementById('c' + i);
                 cell.value = (val === "0" ? "" : val);
-                cell.style.backgroundColor = 'white';
-                cell.style.color = 'black';
+                updateCellStyle(cell); // 導入時也要更新樣式
+                
+                // 恢復預設背景顏色以免被舊 JSON 影響
+                if (val !== "7") {
+                    cell.style.backgroundColor = 'white';
+                    cell.style.color = 'black';
+                }
             }
             exportString();
             alert("數列導入成功！");
@@ -256,8 +248,15 @@
                 data.forEach((item, i) => {
                     const cell = document.getElementById('c' + i);
                     cell.value = (item.val == 0 ? "" : item.val);
-                    cell.style.color = item.isFixed ? 'black' : 'var(--purple)';
-                    cell.style.backgroundColor = item.isFixed ? '#f2f2f2' : 'white';
+                    
+                    // 根據 JSON 設定樣式
+                    if (item.val == 7) {
+                        cell.classList.add('ghost');
+                    } else {
+                        cell.classList.remove('ghost');
+                        cell.style.color = item.isFixed ? 'black' : 'var(--purple)';
+                        cell.style.backgroundColor = item.isFixed ? '#f2f2f2' : 'white';
+                    }
                 });
                 exportString();
             } catch (e) {
