@@ -147,7 +147,15 @@
 
         .cell.selected { background: #e3f2fd; outline: 2px solid var(--blue); z-index: 5; }
 
-        .side-panel { width: 340px; display: flex; flex-direction: column; gap: 15px; }
+        .side-panel { 
+            width: 340px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            /* 確保在彈性佈局中，側邊欄不會被壓縮變形 */
+            flex-shrink: 0; 
+        }        
+
         .status-banner { background: white; padding: 15px; border-radius: 15px; text-align: center; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.03); font-size: 18px; }
         .member-area { background: rgba(255,255,255,0.7); padding: 12px; border-radius: 12px; border: 1px dashed #ccc; }
         .member-badge { display: inline-block; padding: 5px 12px; background: white; border-radius: 20px; margin: 4px; border: 1px solid #eee; font-size: 13px; }
@@ -181,12 +189,12 @@
     }
 
     /* 調整手機端的顯示順序 */
-    #action-area { order: 1; }      /* 換題/準備 最優先，緊貼題目下方 */
-    #info-area { order: 2; }        /* 房號資訊 */
-    #status-txt { order: 3; }       /* 狀態橫幅 (輪到誰) */
-    #control-area { order: 4; }     /* 數字鍵盤 */
-    .member-area { order: 5; }      /* 玩家名單 */
-    .side-panel > div:last-child { order: 6; } /* 退出與解散 */
+    #control-area { order: 1; }      /* 1. 數字鍵盤：最優先（最靠近題目/手指） */
+    #info-area    { order: 2; }      /* 2. 房號資訊：稍微靠上方便查看 */
+    #status-txt   { order: 3; }      /* 3. 狀態橫幅：顯示目前輪到誰 */
+    #action-area  { order: 4; }      /* 4. 換題/準備：放在中下段 */
+    .member-area  { order: 5; }      /* 5. 玩家名單 */
+    .side-panel > div:last-child { order: 6; } /* 6. 退出與解散 */
 
     .keypad { margin: 5px 0 10px 0; gap: 8px; }
     .n-btn { padding: 10px 0 !important; font-size: 22px; height: auto !important; }
