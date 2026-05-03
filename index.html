@@ -139,7 +139,34 @@
             .lobby-box, .notice-board { width: 90%; max-width: 400px; }
             :root { --cell: 15.5vw; } 
             #game-ui { flex-direction: column; align-items: center; gap: 10px; }
-            .side-panel { width: 95%; }
+            
+            /* --- 修改重點開始 --- */
+            .side-panel { 
+                width: 95%; 
+                display: flex; 
+                flex-direction: column; 
+            }
+
+            /* 1. 房號與玩家號碼 */
+            .side-panel > div:first-child { order: 1; } 
+
+            /* 2. 狀態橫幅 (等待玩家 / 輪到 X 號) */
+            .status-banner { order: 2; }
+
+            /* 3. 數字鍵盤 (原本在最下面，現在移到中間) */
+            #control-area { order: 3; }
+
+            /* 4. 當前玩家清單 */
+            .member-area { order: 4; }
+
+            /* 5. 功能按鈕 (準備、換題) */
+            #ready-btn { order: 5; }
+            #change-btn { order: 6; }
+
+            /* 6. 最底部的退出與解散 */
+            .side-panel > div:last-child { order: 7; } 
+            /* --- 修改重點結束 --- */
+
             .keypad { margin: 5px 0 10px 0; gap: 8px; }
             .n-btn { padding: 10px 0 !important; font-size: 22px; height: auto !important; }
         }
@@ -199,18 +226,18 @@
     <div class="notice-board">
         <div class="notice-title">📢 系統公告</div>
         <div class="notice-content">
-            Welcome To <b>連線數獨第一品牌</b><br>
-            • 💡 <span onclick="openModal('guide-modal')" style="color: var(--purple); font-weight: bold; text-decoration: underline; cursor: pointer;">點我查看新手教學</span><br>
+            Welcome To <b>連線數獨第一品牌</b><br>            
+            • 💡 <span onclick="openModal('guide-modal')" style="color:#8C00FF; font-weight: bold; text-decoration: underline; cursor: pointer;">點我查看新手教學</span><br>
             • 覺得題目很🦐可以投票換題。<br>
             • <b>回報問題</b>：若題目有誤請回報給我們。<br>
-            • 目前題庫共有 50 題可挑戰！<br>
-            <span style="font-size: 15px; color: #999;">最近更新：115/5/2</span>
+            • 目前題庫共有 51 題可挑戰！<br>
+            <span style="font-size: 15px; color: #999;">最近更新：115年5月2日</span>
             
             <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee;">
                 <img src="sudokuQRcode.png" style="width: 100px; height: 100px; border-radius: 4px; background: white;" alt="QR">
                 <div style="text-align: left;">
                     <b style="font-size: 15px; color: #333;">📲 邀請損友</b><br>
-                    <span style="font-size: 13px; color: #666;">掃QR-Code立即加入對戰</span>
+                    <span style="font-size: 13px; color: #666;">掃QR-Code立即加入混戰</span>
                 </div>
             </div>
         </div>
@@ -259,6 +286,8 @@
     <div class="modal-box" style="width: 85%; max-width: 400px;">
         <h3>🎮新手教學</h3>
         <p style="text-align:left; font-size:18px; color:#666;">數獨的規則用人話說就是：<b>每六格、直行、橫列都要有123456</b>。</p>
+        <p style="text-align:left; font-size:18px; color:#666;"><b>本遊戲需合作答題</b>。如果你的隊友掛機，請肘擊他。</p>
+
         <button class="btn-main" onclick="closeModal('guide-modal')">我知道了</button>
     </div>
 </div>
